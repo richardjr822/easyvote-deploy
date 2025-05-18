@@ -1,0 +1,26 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+/* Apply the font globally */
+body {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Background Image */
+.background-image {
+  position: absolute;
+  inset: 0;
+  background: url('/assets/phoenix.jpg') no-repeat center center;
+  background-size: cover;
+  filter: brightness(0.2); /* Reduces brightness for a dim effect */
+  z-index: 0;
+}
+
+/* Black Tint Overlay */
+.background-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.1); /* Black tint with 10% opacity */
+  z-index: 1;
+}
+
