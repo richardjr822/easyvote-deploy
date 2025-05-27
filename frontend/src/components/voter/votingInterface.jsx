@@ -5,6 +5,8 @@ import {
   FaExclamationCircle, FaCheckCircle, FaInfo
 } from "react-icons/fa";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const VotingInterface = () => {
   const { electionId } = useParams();
   const navigate = useNavigate();
@@ -49,7 +51,7 @@ const VotingInterface = () => {
           throw new Error("Not authenticated. Please log in again.");
         }
         
-        const studentResponse = await fetch('http://localhost:8000/api/v1/students/me', {
+        const studentResponse = await fetch(`${API_BASE_URL}/students/me`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -63,7 +65,7 @@ const VotingInterface = () => {
         const studentId = studentInfo.id;
         
         // 1. Get organization details
-        const orgResponse = await fetch(`http://localhost:8000/api/v1/organizations/by-name/${orgName}`, {
+        const orgResponse = await fetch(`${API_BASE_URL}/organizations/by-name/${orgName}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -76,7 +78,7 @@ const VotingInterface = () => {
         const orgData = await orgResponse.json();
         
         // 2. Get election status
-        const statusResponse = await fetch(`http://localhost:8000/api/v1/elections/status/${orgName}`, {
+        const statusResponse = await fetch(`${API_BASE_URL}/elections/status/${orgName}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -94,7 +96,7 @@ const VotingInterface = () => {
         }
         
         // 3. NEW: Check if student has already voted in this election
-        const votedResponse = await fetch(`http://localhost:8000/api/v1/votes/check-voted?election_id=${electionDbId}&student_id=${studentId}`, {
+        const votedResponse = await fetch(`${API_BASE_URL}/votes/check-voted?election_id=${electionDbId}&student_id=${studentId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -110,7 +112,7 @@ const VotingInterface = () => {
         }
         
         // 4. Get candidates for this organization
-        const candidatesResponse = await fetch(`http://localhost:8000/api/v1/candidates`, {
+        const candidatesResponse = await fetch(`${API_BASE_URL}/candidates`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
@@ -148,7 +150,7 @@ const VotingInterface = () => {
             photo: candidate.photo_url 
               ? (candidate.photo_url.startsWith('http') 
                   ? candidate.photo_url 
-                  : `http://localhost:8000${candidate.photo_url.startsWith('/') ? '' : '/'}${candidate.photo_url}`)
+                  : `${API_BASE_URL.replace('/api/v1', '')}${candidate.photo_url.startsWith('/') ? '' : '/'}${candidate.photo_url}`)
               : getOrganizationLogo(orgName)
           }))
         };
@@ -311,7 +313,7 @@ const VotingInterface = () => {
       }
       
       // Fetch student information from the backend using the token
-      const studentResponse = await fetch('http://localhost:8000/api/v1/students/me', {
+      const studentResponse = await fetch(`${API_BASE_URL}/students/me`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -328,7 +330,7 @@ const VotingInterface = () => {
       
       // First get the current ongoing election ID
       const orgName = convertElectionIdToOrgName(electionId);
-      const statusResponse = await fetch(`http://localhost:8000/api/v1/elections/status/${orgName}`, {
+      const statusResponse = await fetch(`${API_BASE_URL}/elections/status/${orgName}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -352,7 +354,7 @@ const VotingInterface = () => {
       }
       
       // Submit votes to the backend
-      const response = await fetch('http://localhost:8000/api/v1/votes/submit', {
+      const response = await fetch(`${API_BASE_URL}/votes/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

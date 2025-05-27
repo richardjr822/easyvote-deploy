@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { FaUser, FaLock, FaSignInAlt, FaUserCircle, FaVoteYea, FaCheckCircle } from "react-icons/fa";
 import { login, getCurrentUser } from '../services/api';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const Login = () => {
   const [role, setRole] = useState("Voter");
   const [studentId, setStudentId] = useState("");  // Changed from username to studentId

@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import Header from "./header";
 import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 // Constants for election status and organization keys
 const ELECTION_STATUS = {
   NOT_STARTED: "not_started",
@@ -42,16 +44,16 @@ const AdminDashboard = () => {
   const fetchData = useCallback(async () => {
     try {
       const [analyticsRes, orgsRes] = await Promise.all([
-    axios.get("http://localhost:8000/api/v1/elections/statistics", {
-      headers: {
-        "Authorization": `Bearer ${localStorage.getItem("token")}`,
-      }
-        }),
-    axios.get("http://localhost:8000/api/v1/organizations", {
-      headers: {
-        "Authorization": `Bearer ${localStorage.getItem("token")}`,
-      }
-    })
+  axios.get(`${API_BASE_URL}/elections/statistics`, {
+    headers: {
+      "Authorization": `Bearer ${localStorage.getItem("token")}`,
+    }
+  }),
+  axios.get(`${API_BASE_URL}/organizations`, {
+    headers: {
+      "Authorization": `Bearer ${localStorage.getItem("token")}`,
+    }
+  })
       ]);
 
       setAnalyticsData(analyticsRes.data);
@@ -150,7 +152,7 @@ const AdminDashboard = () => {
       if (val === "bsemc") eligibleVoters = "BSEMC Students";
     }
 
-      const res = await axios.post("http://localhost:8000/api/v1/elections/start", {
+      const res = await axios.post(`${API_BASE_URL}/elections/start`, {
         organization_name: orgName,
         duration_hours: duration,
         eligible_voters: eligibleVoters,
@@ -187,7 +189,7 @@ const AdminDashboard = () => {
     setIsProcessing(true);
 
     try {
-      const res = await axios.post("http://localhost:8000/api/v1/elections/stop", {
+      const res = await axios.post(`${API_BASE_URL}/elections/stop`, {
         organization_name: modalData.title
       }, {
         headers: {
@@ -790,7 +792,7 @@ const confirmCreateNewElection = async () => {
     const duration = 8; // Default to 8 hours
     const eligibleVoters = "All CCS Students";
     const res = await axios.post(
-      "http://localhost:8000/api/v1/organizations/new",
+      `${API_BASE_URL}/organizations/new`,
       {
         organization_name: pendingCreateOrg.orgName,
         duration_hours: duration,

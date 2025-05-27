@@ -8,7 +8,7 @@ services:
     envVars:
       - key: SUPABASE_URL
         value: https://bsddbiaqyjpguwhyekjk.supabase.co
-      - key: SUPABASE_KEY  
+      - key: SUPABASE_KEY
         value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzZGRiaWFxeWpwZ3V3aHlla2prIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5NzM5NDYsImV4cCI6MjA2MjU0OTk0Nn0.KZRx91Cj1emR3yP4OsIEJQGkk0dLVh6NpR5M5frDprw
       - key: SECRET_KEY
         value: X/t86v3jGD3NAaK+cbnIkrTf7Bb8mlj3TGHtPux0Fg2CyPGWVBTfAcWKypY1BzsXyQHhD5goBiGLIV9oiV/GRA==
@@ -17,4 +17,4 @@ services:
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: 30
       - key: SUPABASE_SERVICE_ROLE_KEY
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzZGRiaWFxeWpwZ3V3aHlea2prIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Njk3Mzk0NiwiZXhwIjoyMDYyNTQ5OTQ2fQ.FEKPPQFSHVJudfhw9DCxiOKWeGvLlDvW0KrwfOmobns
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzZGRiaWFxeWpwZ3V3aHlla2prIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0Njk3Mzk0NiwiZXhwIjoyMDYyNTQ5OTQ2fQ.FEKPPQFSHVJudfhw9DCxiOKWeGvLlDvW0KrwfOmobns

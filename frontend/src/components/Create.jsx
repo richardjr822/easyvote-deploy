@@ -5,6 +5,8 @@ import {
 } from "react-icons/fa";
 import Header from "./header";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const Create = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
@@ -97,7 +99,7 @@ const Create = () => {
       formDataObj.append('photo', formData.photo);
       
       // Send to API
-      const response = await fetch('http://localhost:8000/api/v1/candidates/with-position', {
+      const response = await fetch(`${API_BASE_URL}/candidates/with-position`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -127,7 +129,7 @@ const Create = () => {
         organization: formData.group,
         photoUrl: newCandidate.photo_url.startsWith('http') 
           ? newCandidate.photo_url 
-          : `http://localhost:8000${newCandidate.photo_url}`,
+          : `${API_BASE_URL.replace('/api/v1', '')}${newCandidate.photo_url}`,
         timestamp: newCandidate.created_at
       };
       
@@ -156,7 +158,7 @@ const Create = () => {
   // Function to get organization ID by name
   const getOrgIdByName = async (name) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/organizations/by-name/${encodeURIComponent(name)}`, {
+      const response = await fetch(`${API_BASE_URL}/organizations/by-name/${encodeURIComponent(name)}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -185,7 +187,7 @@ const Create = () => {
   // Function to load recent candidates
   const loadRecentCandidates = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/candidates/recent', {
+      const response = await fetch(`${API_BASE_URL}/candidates/recent`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -200,7 +202,7 @@ const Create = () => {
         ...c,
         photoUrl: c.photo_url.startsWith('http') 
           ? c.photo_url 
-          : `http://localhost:8000${c.photo_url}`,
+          : `${API_BASE_URL.replace('/api/v1', '')}${c.photo_url}`,
         timestamp: c.created_at
       })));
     } catch (error) {

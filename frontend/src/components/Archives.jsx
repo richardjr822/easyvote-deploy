@@ -8,6 +8,8 @@ import {
   FaUndo, FaExclamationTriangle
 } from "react-icons/fa";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const Archives = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
@@ -56,10 +58,18 @@ const Archives = () => {
       setError(null);
       
       try {
-        // Fetch statistics and candidates in parallel without auth headers
+        // Fetch statistics and candidates in parallel with auth headers
         const [statsRes, candidatesRes] = await Promise.all([
-          axios.get('http://localhost:8000/api/v1/archives/statistics'),
-          axios.get('http://localhost:8000/api/v1/archives/candidates')
+          axios.get(`${API_BASE_URL}/archives/statistics`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          }),
+          axios.get(`${API_BASE_URL}/archives/candidates`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          })
         ]);
         
         // Update state with fetched data
@@ -199,7 +209,11 @@ const Archives = () => {
     
     try {
       setIsLoading(true);
-      const response = await axios.post(`http://localhost:8000/api/v1/archives/unarchive/${candidateToUnarchive.archiveId}`);
+      const response = await axios.post(`${API_BASE_URL}/archives/unarchive/${candidateToUnarchive.archiveId}`, {}, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
       
       if (response.data.success) {
         // Remove the candidate from the local state
@@ -260,11 +274,9 @@ const Archives = () => {
             
             <div className="flex items-center gap-3 mt-6">
               <img
-                src={candidateToUnarchive.photoUrl ? 
-                  (candidateToUnarchive.photoUrl.startsWith('http') 
-                    ? candidateToUnarchive.photoUrl 
-                    : `http://localhost:8000${candidateToUnarchive.photoUrl.startsWith('/') ? '' : '/'}${candidateToUnarchive.photoUrl}`)
-                  : '/assets/default-profile.jpg'}
+                src={candidateToUnarchive.photoUrl?.startsWith('http') 
+                  ? candidateToUnarchive.photoUrl 
+                  : `${API_BASE_URL.replace('/api/v1', '')}${candidateToUnarchive.photoUrl?.startsWith('/') ? '' : '/'}${candidateToUnarchive.photoUrl || ''}`}
                 alt={candidateToUnarchive.name}
                 className="w-12 h-12 rounded-full object-cover border-2 border-orange-200"
                 onError={(e) => {
@@ -512,9 +524,9 @@ const Archives = () => {
                               <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 mr-2">
                                 {candidate.photoUrl ? (
                                   <img 
-                                    src={candidate.photoUrl.startsWith('http') 
+                                    src={candidate.photoUrl?.startsWith('http') 
                                       ? candidate.photoUrl 
-                                      : `http://localhost:8000${candidate.photoUrl.startsWith('/') ? '' : '/'}${candidate.photoUrl}`}
+                                      : `${API_BASE_URL.replace('/api/v1', '')}${candidate.photoUrl?.startsWith('/') ? '' : '/'}${candidate.photoUrl || ''}`}
                                     alt={candidate.name}
                                     className="w-full h-full object-cover"
                                     onError={(e) => {
@@ -615,15 +627,15 @@ const Archives = () => {
                                 <div className="flex-shrink-0 h-10 w-10 rounded-full overflow-hidden bg-gray-200">
                                   {candidate.photoUrl ? (
                                     <img 
-                                      src={candidate.photoUrl.startsWith('http') 
+                                      src={candidate.photoUrl?.startsWith('http') 
                                         ? candidate.photoUrl 
-                                        : `http://localhost:8000${candidate.photoUrl.startsWith('/') ? '' : '/'}${candidate.photoUrl}`}
-                                      alt={candidate.name}
-                                      className="w-full h-full object-cover"
-                                      onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.src = '/assets/default-profile.jpg';
-                                      }}
+                                        : `${API_BASE_URL.replace('/api/v1', '')}${candidate.photoUrl?.startsWith('/') ? '' : '/'}${candidate.photoUrl || ''}`}
+                                    alt={candidate.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.target.onerror = null;
+                                      e.target.src = '/assets/default-profile.jpg';
+                                    }}
                                     />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center bg-gray-300 text-gray-600 font-medium">

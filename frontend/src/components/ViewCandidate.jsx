@@ -6,7 +6,9 @@ import {
   FaEye, FaChevronLeft, FaChevronRight, FaExclamationTriangle,
   FaEllipsisV, FaInfoCircle
 } from "react-icons/fa";
-import { API_BASE_URL } from '../config';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 
 const ViewCandidate = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -95,7 +97,7 @@ const ViewCandidate = () => {
         photo_url: c.photo_url,
         photoUrl: c.photo_url.startsWith('http') 
           ? c.photo_url 
-          : `http://localhost:8000${c.photo_url}`
+          : `${API_BASE_URL.replace('/api/v1', '')}${c.photo_url}`
       }));
       
       setCandidates(formattedCandidates);
@@ -227,7 +229,7 @@ const ViewCandidate = () => {
   // Archive a single candidate
   const handleArchiveCandidate = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/candidates/${candidateToArchive}/archive`, {
+      const response = await fetch(`${API_BASE_URL}/candidates/${candidateToArchive}/archive`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -282,7 +284,7 @@ const ViewCandidate = () => {
   // Archive all candidates
   const handleArchiveAll = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/candidates/archive-all', {
+      const response = await fetch(`${API_BASE_URL}/candidates/archive-all`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -338,7 +340,7 @@ const ViewCandidate = () => {
   // Get organization ID by name
   const getOrgIdByName = async (name) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/organizations/by-name/${encodeURIComponent(name)}`, {
+      const response = await fetch(`${API_BASE_URL}/organizations/by-name/${encodeURIComponent(name)}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -387,7 +389,7 @@ const ViewCandidate = () => {
       }
       
       // Send update request to API
-      const updateResponse = await fetch(`http://localhost:8000/api/v1/candidates/${currentCandidate.id}`, {
+      const updateResponse = await fetch(`${API_BASE_URL}/candidates/${currentCandidate.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -410,7 +412,7 @@ const ViewCandidate = () => {
               ...updatedCandidate,
               photoUrl: updatedCandidate.photo_url.startsWith('http') 
                 ? updatedCandidate.photo_url 
-                : `http://localhost:8000${updatedCandidate.photo_url}`
+                : `${API_BASE_URL.replace('/api/v1', '')}${updatedCandidate.photo_url}`
             }
           : candidate
       ));

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import Header from "./header";
 import { FaEdit, FaSearch, FaSort, FaTimes, FaSortUp, FaSortDown, FaUserCog, FaFilter, FaChevronDown, FaCheck } from "react-icons/fa";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const Accounts = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [students, setStudents] = useState([]);
@@ -34,7 +36,7 @@ const Accounts = () => {
   const loadStudents = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/api/v1/students', {
+      const response = await fetch(`${API_BASE_URL}/students`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -161,7 +163,7 @@ const Accounts = () => {
     try {
       setIsUpdating(true);
       
-      const response = await fetch(`http://localhost:8000/api/v1/students/${currentStudent.id}`, {
+      const response = await fetch(`${API_BASE_URL}/students/${currentStudent.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

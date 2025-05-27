@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { FaCalendarAlt, FaClock, FaBars } from "react-icons/fa";
 import { useLocation } from "react-router-dom";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const Header = ({ username = "Admin", onMenuClick }) => {
   const location = useLocation();
 

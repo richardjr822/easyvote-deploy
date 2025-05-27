@@ -3,6 +3,8 @@ import { FaCalendarAlt, FaClock, FaUserCircle, FaSignOutAlt, FaBars, FaTimes, Fa
 import { useLocation, useNavigate } from "react-router-dom";
 import { logout, getCurrentUser } from "../../services/api"; // Import logout function
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const VoterHeader = ({ username: propUsername, studentInfo: propStudentInfo = {} }) => {
   const location = useLocation();
   const navigate = useNavigate();

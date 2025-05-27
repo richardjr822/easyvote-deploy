@@ -3,6 +3,8 @@ import { FaUserCircle, FaHome, FaUserPlus, FaClipboardList, FaUsers, FaArchive, 
 import { useLocation, useNavigate } from "react-router-dom";
 import { logout, getCurrentUser } from "../services/api"; // Import the logout function
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const AdminSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();

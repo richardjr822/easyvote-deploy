@@ -6,6 +6,9 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const VoterDashboard = () => {
   const navigate = useNavigate();
   
@@ -208,7 +211,7 @@ const VoterDashboard = () => {
       setElectionsLoading(true);
       
       // Fetch organizations data
-      const organizationsData = await cachedFetch('http://localhost:8000/api/v1/organizations');
+      const organizationsData = await cachedFetch(`${API_BASE_URL}/organizations`);
       
       // Create elections with basic data first (for immediate display)
       const elections = organizationsData.map(org => {
@@ -301,7 +304,7 @@ const VoterDashboard = () => {
     const promises = elections.map(async (election) => {
       try {
         const statusData = await cachedFetch(
-          `http://localhost:8000/api/v1/elections/status/${encodeURIComponent(election.name)}`
+          `${API_BASE_URL}/elections/status/${encodeURIComponent(election.name)}`
         );
         if (statusData.election_id) {
           electionIds[election.id] = statusData.election_id;
@@ -326,12 +329,12 @@ const VoterDashboard = () => {
       try {
         // First get the election ID
         const statusData = await cachedFetch(
-          `http://localhost:8000/api/v1/elections/status/${encodeURIComponent(election.name)}`
+          `${API_BASE_URL}/elections/status/${encodeURIComponent(election.name)}`
         );
         
         if (statusData.election_id) {
           const voteData = await cachedFetch(
-            `http://localhost:8000/api/v1/votes/check-voted?election_id=${statusData.election_id}&student_id=${studentId}`
+            `${API_BASE_URL}/votes/check-voted?election_id=${statusData.election_id}&student_id=${studentId}`
           );
           voteStatuses[election.id] = voteData.has_voted || false;
         }
@@ -352,7 +355,7 @@ const VoterDashboard = () => {
         setLoading(true);
         
         // Fetch user data
-        const userData = await cachedFetch('http://localhost:8000/api/v1/students/me');
+        const userData = await cachedFetch(`${API_BASE_URL}/students/me`);
         
         // Update student info immediately
         const enhancedUserData = {
@@ -489,7 +492,7 @@ const VoterDashboard = () => {
       setShowReceiptModal(true);
       
       const data = await cachedFetch(
-        `http://localhost:8000/api/v1/votes/receipt?election_id=${actualElectionId}&student_id=${studentInfo.id}`
+        `${API_BASE_URL}/votes/receipt?election_id=${actualElectionId}&student_id=${studentInfo.id}`
       );
       
       const election = filteredElections.find(e => e.id === electionId);

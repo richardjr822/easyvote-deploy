@@ -5,6 +5,8 @@ import {
 } from "react-icons/fa";
 import Header from "./header";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
 const Tally = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [loading, setLoading] = useState(true);
@@ -33,8 +35,8 @@ const Tally = () => {
         setLoading(true);
         setError(null);
         
-        // Fetch results from your API
-        const response = await fetch('http://localhost:8000/api/v1/elections/results', {
+        // Fetch results from your API - Updated to use environment variable
+        const response = await fetch(`${API_BASE_URL}/elections/results`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
