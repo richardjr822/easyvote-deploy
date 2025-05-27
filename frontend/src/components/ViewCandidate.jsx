@@ -6,6 +6,7 @@ import {
   FaEye, FaChevronLeft, FaChevronRight, FaExclamationTriangle,
   FaEllipsisV, FaInfoCircle
 } from "react-icons/fa";
+import { API_BASE_URL } from '../config';
 
 const ViewCandidate = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -75,7 +76,7 @@ const ViewCandidate = () => {
   const loadCandidates = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/api/v1/candidates/', {
+      const response = await fetch(`${API_BASE_URL}/candidates/`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
