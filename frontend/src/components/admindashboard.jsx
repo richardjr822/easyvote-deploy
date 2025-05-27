@@ -35,6 +35,7 @@ const AdminDashboard = () => {
   const [electionDurations, setElectionDurations] = useState({});
   const [showCreateConfirmation, setShowCreateConfirmation] = useState(false);
   const [pendingCreateOrg, setPendingCreateOrg] = useState(null);
+  const [successMessage, setSuccessMessage] = useState("Operation completed successfully!");
   const navigate = useNavigate();
 
   // Fetch analytics and status for organizations
@@ -254,6 +255,19 @@ const AdminDashboard = () => {
       "IMAGES": 0 
     },
     voted: { BSIT: 0, BSCS: 0, BSEMC: 0 },
+    votersByProgram: { BSIT: 0, BSCS: 0, BSEMC: 0 },
+    orgVoted: {
+      "CCS Student Council": 0,
+      "ELITES": 0,
+      "SPECS": 0,
+      "IMAGES": 0
+    },
+    orgVoters: {
+      "CCS Student Council": 0,
+      "ELITES": 0,
+      "SPECS": 0,
+      "IMAGES": 0
+    }
   };
   const totalVoted = Object.values(analytics.voted).reduce((a, b) => a + b, 0);
   const votingPercentage =
@@ -401,7 +415,10 @@ const AdminDashboard = () => {
 
     if (isElectionFinished) {
       return (
-        <div className="p-4 sm:p-6 md:p-8 flex flex-col md:flex-row gap-6 md:gap-8">
+        <div className="flex flex-col h-full">
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8">
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8">
           {/* Left Section - Organization Info */}
           <div className="flex flex-col items-center md:w-1/3 gap-4 sm:gap-6">
             <div className="relative md:mt-8">
@@ -419,68 +436,89 @@ const AdminDashboard = () => {
               <div className="mt-2">
                 {getStatusBadge(ELECTION_STATUS.FINISHED)}
               </div>
+              <div className="mt-4 bg-orange-50 rounded-lg p-3">
+                <span className="text-sm text-orange-600 font-medium">Election Complete</span>
+                <div className="text-sm text-gray-600 mt-1">
+                  Ended: {calculatedEndTime}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Right Section - Election Results */}
+          {/* Right Section - Quick Actions Only */}
           <div className="flex flex-col md:w-2/3 gap-4 sm:gap-6">
             <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
               <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <svg className="h-4 w-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <svg className="h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Election Results
+                Quick Actions
               </h4>
-              <div className="space-y-4">
-                <div className="bg-orange-50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-orange-700">Total Votes Cast</span>
-                    <span className="text-lg font-bold text-orange-800">0</span>
-                  </div>
-                  <div className="h-2 bg-orange-200 rounded-full">
-                    <div className="h-2 bg-orange-500 rounded-full" style={{ width: '0%' }}></div>
+              <div className="space-y-3">
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-medium text-blue-800">Archive Current Data</h5>
+                      <p className="text-xs text-blue-600 mt-1">All election data and candidates have been automatically preserved for record keeping.</p>
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <span className="text-xs text-gray-500">Voter Turnout</span>
-                    <div className="text-lg font-semibold text-gray-800">0%</div>
+                
+                <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-medium text-green-800">Start New Election Cycle</h5>
+                      <p className="text-xs text-green-600 mt-1">Ready to create a fresh election with new candidates and positions for the next term.</p>
+                    </div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <span className="text-xs text-gray-500">Duration</span>
-                    <div className="text-lg font-semibold text-gray-800">24h</div>
+                </div>
+
+                <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h5 className="text-sm font-medium text-purple-800">Manage Candidates</h5>
+                      <p className="text-xs text-purple-600 mt-1">Current candidates are archived. Add new candidates when ready to start the next election.</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-3 pt-3 sm:pt-4 border-t border-gray-200 mt-3 sm:mt-4">
-              {/* Add new election button */}
-              <button
-                className="px-4 sm:px-8 py-2 sm:py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-colors shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center text-xs sm:text-sm"
-                onClick={() => handleCreateNewElection(modalData.title, modalData.logo)}
-                type="button"
-                disabled={isProcessing}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                {isProcessing ? "Creating..." : "Create New Election"}
-              </button>
-              <button
-                className="px-4 sm:px-8 py-2 sm:py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg hover:from-orange-600 hover:to-orange-700 transition-colors shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 flex items-center text-xs sm:text-sm"
-                onClick={() => handleOpenModal(modalData.title, modalData.logo)}
-                type="button"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                Download Results
-              </button>
-            </div>
           </div>
         </div>
+      </div>
+
+      {/* Sticky Footer with Action Button */}
+      <div className="bg-gray-50 border-t border-gray-200 p-4 flex-shrink-0">
+        <div className="flex justify-center">
+          <button
+            className="px-6 sm:px-8 py-3 sm:py-3.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-colors shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 flex items-center text-sm sm:text-base font-medium"
+            onClick={() => handleCreateNewElection(modalData.title, modalData.logo)}
+            type="button"
+            disabled={isProcessing}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            {isProcessing ? "Creating..." : "Create New Election"}
+          </button>
+        </div>
+      </div>
+    </div>
       );
     }
 
@@ -663,8 +701,8 @@ const AdminDashboard = () => {
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Start Election
+                </svg>
+                Start Election
                 </>
               )}
             </button>
@@ -749,10 +787,10 @@ const handleCreateNewElection = (orgName, logo) => {
 const confirmCreateNewElection = async () => {
   setIsProcessing(true);
   try {
-    const duration = 8; // You can prompt for this if needed
+    const duration = 8; // Default to 8 hours
     const eligibleVoters = "All CCS Students";
     const res = await axios.post(
-      "http://localhost:8000/api/v1/elections/new",
+      "http://localhost:8000/api/v1/organizations/new",
       {
         organization_name: pendingCreateOrg.orgName,
         duration_hours: duration,
@@ -766,11 +804,16 @@ const confirmCreateNewElection = async () => {
       }
     );
     if (res.status !== 200 && res.status !== 201) throw new Error("Failed to create new election");
+    
+    setSuccessMessage("New election created and previous candidates archived");
     setShowSuccess(true);
     setIsModalOpen(false);
     setShowCreateConfirmation(false);
     setPendingCreateOrg(null);
+    
+    // Refresh data immediately
     await fetchData();
+    
     setTimeout(() => setShowSuccess(false), 3000);
   } catch (err) {
     setErrorMessage(
@@ -823,8 +866,8 @@ const confirmCreateNewElection = async () => {
                 <>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  Create Election
+                </svg>
+                Create Election
                 </>
               )}
             </button>
@@ -915,46 +958,68 @@ const confirmCreateNewElection = async () => {
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-blue-400 to-blue-500"></div>
           </div>
 
-          {/* Voters Ratio Card */}
+          {/* Voters Participation Card */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 relative">
-            <div className="p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-gradient-to-br from-green-100 to-green-50 p-2.5 sm:p-3 rounded-xl shadow-sm">
-                  <FaChartBar className="text-xl sm:text-2xl text-green-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm sm:text-base font-medium text-gray-500">Voters Participation</h3>
-                    <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                      {loading ? "..." : `${votingPercentage}%`}
-                    </p>
-                  </div>
-                </div>
-                <span className="bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm">
-                  Turnout
-                </span>
-              </div>
-              <div className="space-y-3">
-                <div className="h-3 w-full bg-gradient-to-r from-gray-100 to-gray-50 rounded-full shadow-inner overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-green-500 to-green-600 rounded-full shadow-sm transition-all duration-500"
-                    style={{ width: `${votingPercentage}%` }}
-                  ></div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-gradient-to-br from-gray-50 to-white p-3 rounded-lg shadow-sm">
-                    <p className="text-xs text-gray-500 mb-1">Votes Cast</p>
-                    <p className="text-lg font-semibold text-gray-800">{totalVoted}</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-gray-50 to-white p-3 rounded-lg shadow-sm">
-                    <p className="text-xs text-gray-500 mb-1">Remaining</p>
-                    <p className="text-lg font-semibold text-gray-800">{analytics.totalVoters - totalVoted}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 via-green-400 to-green-500"></div>
-          </div>
+  <div className="p-4 sm:p-6">
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <div className="bg-gradient-to-br from-green-100 to-green-50 p-2.5 sm:p-3 rounded-xl shadow-sm">
+        <FaChartBar className="text-xl sm:text-2xl text-green-600" />
+        </div>
+        <div>
+          <h3 className="text-sm sm:text-base font-medium text-gray-500">Voters Participation</h3>
+          <p className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+            {loading ? "..." : `${votingPercentage}%`}
+          </p>
+        </div>
+      </div>
+      <span className="bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 text-xs font-semibold px-3 py-1.5 rounded-full shadow-sm">
+        Turnout
+      </span>
+    </div>
+    <div className="space-y-3">
+      <div className="h-3 w-full bg-gradient-to-r from-gray-100 to-gray-50 rounded-full shadow-inner overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-green-500 to-green-600 rounded-full shadow-sm transition-all duration-500"
+          style={{ width: `${votingPercentage}%` }}
+        ></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-gradient-to-br from-orange-50 to-white p-3 rounded-lg shadow-sm">
+          <p className="text-xs text-orange-600 mb-1 font-medium">CCS Student Council</p>
+          <p className="text-lg font-semibold text-gray-800">{analytics.orgVoted?.["CCS Student Council"] || 0}</p>
+          <p className="text-xs text-gray-500">
+            of {analytics.orgVoters?.["CCS Student Council"] || analytics.totalVoters || 0} eligible
+          </p>
+        </div>
+        <div className="bg-gradient-to-br from-blue-50 to-white p-3 rounded-lg shadow-sm">
+          <p className="text-xs text-blue-600 mb-1 font-medium">ELITES</p>
+          <p className="text-lg font-semibold text-gray-800">{analytics.orgVoted?.["ELITES"] || 0}</p>
+          <p className="text-xs text-gray-500">
+            of {analytics.orgVoters?.["ELITES"] || analytics.votersByProgram?.BSIT || 0} eligible
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-gradient-to-br from-purple-50 to-white p-3 rounded-lg shadow-sm">
+          <p className="text-xs text-purple-600 mb-1 font-medium">SPECS</p>
+          <p className="text-lg font-semibold text-gray-800">{analytics.orgVoted?.["SPECS"] || 0}</p>
+          <p className="text-xs text-gray-500">
+            of {analytics.orgVoters?.["SPECS"] || analytics.votersByProgram?.BSCS || 0} eligible
+          </p>
+        </div>
+        <div className="bg-gradient-to-br from-green-50 to-white p-3 rounded-lg shadow-sm">
+          <p className="text-xs text-green-600 mb-1 font-medium">IMAGES</p>
+          <p className="text-lg font-semibold text-gray-800">{analytics.orgVoted?.["IMAGES"] || 0}</p>
+          <p className="text-xs text-gray-500">
+            of {analytics.orgVoters?.["IMAGES"] || analytics.votersByProgram?.BSEMC || 0} eligible
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 via-green-400 to-green-500"></div>
+</div>
 
           {/* Status Card */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow relative">

@@ -126,6 +126,46 @@ async def start_election(
 
     return {"status": "ongoing"}
 
+@router.post("/new")
+async def create_new_election(
+    req: StartElectionRequest,
+    token: str = Depends(oauth2_scheme)
+):
+    """Create a new election and archive all candidates from previous election"""
+    allowed_orgs = [
+        "CCS Student Council",
+        "ELITES",
+        "SPECS",
+        "IMAGES"
+    ]
+    if req.organization_name not in allowed_orgs:
+        raise HTTPException(status_code=400, detail="Invalid organization")
+
+    # Enforce max 24 hours
+    duration = min(req.duration_hours, 24)
+
+    # Get organization ID
+    org_resp = supabase.table("organizations").select("id").eq("name", req.organization_name).single().execute()
+    if not org_resp.data:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    org_id = org_resp.data["id"]
+
+    # Archive all candidates from the previous election
+    archive_resp = supabase.table("candidates").update({"is_archived": True}).eq("organization_id", org_id).eq("is_archived", False).execute()
+    
+    # Create new election
+    election_resp = supabase.table("elections").insert({
+        "organization_id": org_id,
+        "duration_hours": duration,
+        "eligible_voters": req.eligible_voters,
+        "status": "not_started"  # Set to not_started initially
+    }).execute()
+
+    if not election_resp.data:
+        raise HTTPException(status_code=500, detail="Failed to create new election")
+
+    return {"status": "created", "message": "New election created and previous candidates archived"}
+
 @router.get("/by-name/{name}")
 async def get_organization_by_name(name: str, token: str = Depends(oauth2_scheme)):
     try:

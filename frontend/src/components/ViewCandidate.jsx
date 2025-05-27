@@ -47,9 +47,30 @@ const ViewCandidate = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(isMobile ? 3 : 5);
 
-  // Filter by organization
+  // Filter by organization and position
   const [organizationFilter, setOrganizationFilter] = useState("All");
+  const [positionFilter, setPositionFilter] = useState("All");
   
+  // Position hierarchy from VoterDashboard
+  const positionHierarchy = useMemo(() => ({
+    'PRESIDENT': 1,
+    'VICE PRESIDENT': 2,
+    'SECRETARY': 3,
+    'TREASURER': 4,
+    'AUDITOR': 5,
+    'BUSINESS MANAGER': 6,
+    'P.R.O': 7,
+    'PRO': 7,
+    'PUBLIC RELATIONS OFFICER': 7,
+    'SENATOR': 8,
+    'REPRESENTATIVE': 9,
+    'GOVERNOR': 10,
+    'COUNCILOR': 11,
+    'SERGEANT AT ARMS': 12,
+    'MUSE': 13,
+    'ESCORT': 14
+  }), []);
+
   // Load candidates from backend
   const loadCandidates = async () => {
     try {
@@ -107,23 +128,37 @@ const ViewCandidate = () => {
         candidate.group.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesOrganization = organizationFilter === "All" || candidate.group === organizationFilter;
+      const matchesPosition = positionFilter === "All" || candidate.position === positionFilter;
       
-      return matchesSearch && matchesOrganization;
+      return matchesSearch && matchesOrganization && matchesPosition;
     });
-  }, [candidates, searchTerm, organizationFilter]);
+  }, [candidates, searchTerm, organizationFilter, positionFilter]);
   
   const sortedCandidates = useMemo(() => {
     return [...filteredCandidates].sort((a, b) => {
-      if (sortDirection === "asc") {
-        if (a[activeSortField] < b[activeSortField]) return -1;
-        if (a[activeSortField] > b[activeSortField]) return 1;
+      if (activeSortField === "position") {
+        // Use position hierarchy for sorting positions
+        const orderA = positionHierarchy[a.position.toUpperCase()] || 999;
+        const orderB = positionHierarchy[b.position.toUpperCase()] || 999;
+        
+        if (sortDirection === "asc") {
+          return orderA - orderB;
+        } else {
+          return orderB - orderA;
+        }
       } else {
-        if (a[activeSortField] > b[activeSortField]) return -1;
-        if (a[activeSortField] < b[activeSortField]) return 1;
+        // Regular sorting for other fields
+        if (sortDirection === "asc") {
+          if (a[activeSortField] < b[activeSortField]) return -1;
+          if (a[activeSortField] > b[activeSortField]) return 1;
+        } else {
+          if (a[activeSortField] > b[activeSortField]) return -1;
+          if (a[activeSortField] < b[activeSortField]) return 1;
+        }
       }
       return 0;
     });
-  }, [filteredCandidates, activeSortField, sortDirection]);
+  }, [filteredCandidates, activeSortField, sortDirection, positionHierarchy]);
   
   const paginatedCandidates = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -146,6 +181,11 @@ const ViewCandidate = () => {
 
   const handleOrganizationFilter = (org) => {
     setOrganizationFilter(org);
+    setCurrentPage(1);
+  };
+  
+  const handlePositionFilter = (position) => {
+    setPositionFilter(position);
     setCurrentPage(1);
   };
   
@@ -413,10 +453,20 @@ const ViewCandidate = () => {
     setCurrentCandidate(null);
   };
 
-  // Get unique organizations for filter dropdown
+  // Get unique organizations and positions for filter dropdowns
   const uniqueOrganizations = useMemo(() => {
     return ["All", ...new Set(candidates.map(candidate => candidate.group))];
   }, [candidates]);
+
+  const uniquePositions = useMemo(() => {
+    const positions = [...new Set(candidates.map(candidate => candidate.position))];
+    // Sort positions by hierarchy
+    return ["All", ...positions.sort((a, b) => {
+      const orderA = positionHierarchy[a.toUpperCase()] || 999;
+      const orderB = positionHierarchy[b.toUpperCase()] || 999;
+      return orderA - orderB;
+    })];
+  }, [candidates, positionHierarchy]);
 
   // Get photo URL either from server or placeholder
   const getPhotoUrl = (candidate) => {
@@ -478,6 +528,7 @@ const ViewCandidate = () => {
               </div>
               
               <div className="flex gap-2 sm:gap-3">
+                {/* Organization Filter */}
                 <div className="relative flex-1 min-w-[110px] sm:min-w-[120px]">
                   <select
                     value={organizationFilter}
@@ -492,6 +543,24 @@ const ViewCandidate = () => {
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 sm:px-2 text-gray-700">
                     <FaFilter className="text-orange-500 text-xs sm:text-sm" />
+                  </div>
+                </div>
+
+                {/* Position Filter */}
+                <div className="relative flex-1 min-w-[100px] sm:min-w-[110px]">
+                  <select
+                    value={positionFilter}
+                    onChange={(e) => handlePositionFilter(e.target.value)}
+                    className="w-full py-1.5 sm:py-2 pl-3 sm:pl-4 pr-7 sm:pr-8 text-[10px] xs:text-xs sm:text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 appearance-none"
+                  >
+                    {uniquePositions.map((position) => (
+                      <option key={position} value={position} className="text-[10px] xs:text-xs sm:text-sm">
+                        {position === "All" ? "All Positions" : position}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 sm:px-2 text-gray-700">
+                    <FaSort className="text-orange-500 text-xs sm:text-sm" />
                   </div>
                 </div>
                 
@@ -515,6 +584,11 @@ const ViewCandidate = () => {
               {organizationFilter !== "All" && (
                 <span className="ml-1">
                   in <span className="font-medium text-orange-600">{organizationFilter}</span>
+                </span>
+              )}
+              {positionFilter !== "All" && (
+                <span className="ml-1">
+                  for <span className="font-medium text-blue-600">{positionFilter}</span>
                 </span>
               )}
             </div>
@@ -560,6 +634,23 @@ const ViewCandidate = () => {
             </div>
           </div>
         </div>
+
+        {/* Clear Filters Button - Only show when filters are active */}
+        {(organizationFilter !== "All" || positionFilter !== "All") && (
+          <div className="mb-4 flex justify-end">
+            <button
+              onClick={() => {
+                setOrganizationFilter("All");
+                setPositionFilter("All");
+                setCurrentPage(1);
+              }}
+              className="text-xs sm:text-sm text-gray-600 hover:text-orange-600 bg-white border border-gray-300 px-3 py-1.5 rounded-lg hover:border-orange-300 transition-colors flex items-center"
+            >
+              <FaTimes className="mr-1" />
+              Clear Filters
+            </button>
+          </div>
+        )}
 
         {/* Loading indicator */}
         {loading && (

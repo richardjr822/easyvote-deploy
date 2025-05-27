@@ -133,9 +133,15 @@ const Accounts = () => {
   // Handle input change in the update form
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setCurrentStudent({ ...currentStudent, [name]: value });
     
-    // Update the fullName if first_name or last_name changes
+    // Handle block field - always uppercase
+    if (name === "block") {
+      setCurrentStudent({ ...currentStudent, [name]: value.toUpperCase() });
+    } else {
+      setCurrentStudent({ ...currentStudent, [name]: value });
+    }
+    
+    // Update the fullName if first_name or last_name changes (though these won't be editable)
     if (name === "first_name" || name === "last_name") {
       setCurrentStudent(prev => ({
         ...prev,
@@ -162,12 +168,10 @@ const Accounts = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
-          first_name: currentStudent.first_name,
-          last_name: currentStudent.last_name,
-          student_no: currentStudent.student_no,
+          // Only send editable fields
           program: currentStudent.program,
           year_level: currentStudent.year_level,
-          block: currentStudent.block
+          block: currentStudent.block.toUpperCase() // Ensure uppercase
         })
       });
       
@@ -483,7 +487,7 @@ const Accounts = () => {
             </div>
             
             <form onSubmit={showUpdateConfirmation} className="space-y-4">
-              {/* First Name */}
+              {/* First Name - Read Only */}
               <div>
                 <label htmlFor="first_name" className="block text-xs sm:text-sm font-medium text-gray-700">
                   First Name
@@ -493,13 +497,13 @@ const Accounts = () => {
                   id="first_name"
                   name="first_name"
                   value={currentStudent.first_name}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-                  required
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 bg-gray-100 text-gray-600 text-sm cursor-not-allowed"
+                  readOnly
+                  disabled
                 />
               </div>
               
-              {/* Last Name */}
+              {/* Last Name - Read Only */}
               <div>
                 <label htmlFor="last_name" className="block text-xs sm:text-sm font-medium text-gray-700">
                   Last Name
@@ -509,13 +513,13 @@ const Accounts = () => {
                   id="last_name"
                   name="last_name"
                   value={currentStudent.last_name}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-                  required
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 bg-gray-100 text-gray-600 text-sm cursor-not-allowed"
+                  readOnly
+                  disabled
                 />
               </div>
               
-              {/* Student No */}
+              {/* Student No - Read Only */}
               <div>
                 <label htmlFor="student_no" className="block text-xs sm:text-sm font-medium text-gray-700">
                   Student No.
@@ -525,9 +529,9 @@ const Accounts = () => {
                   id="student_no"
                   name="student_no"
                   value={currentStudent.student_no}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
-                  required
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 bg-gray-100 text-gray-600 text-sm cursor-not-allowed"
+                  readOnly
+                  disabled
                 />
               </div>
               
@@ -550,7 +554,7 @@ const Accounts = () => {
                 </select>
               </div>
               
-              {/* Year Level */}
+              {/* Year Level - Updated to only go up to 3rd year */}
               <div>
                 <label htmlFor="year_level" className="block text-xs sm:text-sm font-medium text-gray-700">
                   Year Level
@@ -566,11 +570,10 @@ const Accounts = () => {
                   <option value="1st Year">1st Year</option>
                   <option value="2nd Year">2nd Year</option>
                   <option value="3rd Year">3rd Year</option>
-                  <option value="4th Year">4th Year</option>
                 </select>
               </div>
               
-              {/* Block */}
+              {/* Block - Auto uppercase */}
               <div>
                 <label htmlFor="block" className="block text-xs sm:text-sm font-medium text-gray-700">
                   Block
@@ -581,7 +584,8 @@ const Accounts = () => {
                   name="block"
                   value={currentStudent.block}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm uppercase"
+                  placeholder="Enter block (e.g., A, B, C)"
                   required
                 />
               </div>
@@ -624,21 +628,6 @@ const Accounts = () => {
                 <div className="bg-gray-50 p-3 rounded-lg text-left text-xs mb-4">
                   <h4 className="font-medium text-gray-900 mb-2">Changes to be made:</h4>
                   <ul className="space-y-1">
-                    {currentStudent.first_name !== originalStudentData.first_name && (
-                      <li>
-                        <span className="font-medium">First Name:</span> {originalStudentData.first_name} → {currentStudent.first_name}
-                      </li>
-                    )}
-                    {currentStudent.last_name !== originalStudentData.last_name && (
-                      <li>
-                        <span className="font-medium">Last Name:</span> {originalStudentData.last_name} → {currentStudent.last_name}
-                      </li>
-                    )}
-                    {currentStudent.student_no !== originalStudentData.student_no && (
-                      <li>
-                        <span className="font-medium">Student No.:</span> {originalStudentData.student_no} → {currentStudent.student_no}
-                      </li>
-                    )}
                     {currentStudent.program !== originalStudentData.program && (
                       <li>
                         <span className="font-medium">Program:</span> {originalStudentData.program} → {currentStudent.program}
@@ -655,6 +644,11 @@ const Accounts = () => {
                       </li>
                     )}
                   </ul>
+                  {currentStudent.program === originalStudentData.program && 
+                   currentStudent.year_level === originalStudentData.year_level && 
+                   currentStudent.block === originalStudentData.block && (
+                    <p className="text-gray-500 text-center">No changes detected</p>
+                  )}
                 </div>
               )}
             </div>

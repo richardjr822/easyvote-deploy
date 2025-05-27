@@ -108,6 +108,14 @@ async def get_election_statistics(token: str = Depends(oauth2_scheme)) -> Dict:
         voters_resp = supabase.table("students").select("id, program").execute()
         total_voters = len(voters_resp.data) if voters_resp.data else 0
         
+        # Count voters by program for eligibility calculation
+        voters_by_program = {"BSIT": 0, "BSCS": 0, "BSEMC": 0}
+        if voters_resp.data:
+            for voter in voters_resp.data:
+                program = voter["program"]
+                if program in voters_by_program:
+                    voters_by_program[program] += 1
+        
         # Get candidates by organization
         candidates_by_org = {
             "CCS Student Council": 0,
@@ -127,34 +135,78 @@ async def get_election_statistics(token: str = Depends(oauth2_scheme)) -> Dict:
                 if org_name in candidates_by_org:
                     candidates_by_org[org_name] += 1
         
-        # Get votes by program for active elections
-        voted_by_program = {"BSIT": 0, "BSCS": 0, "BSEMC": 0}
+        # Get organization-specific vote counts
+        org_voted_counts = {
+            "CCS Student Council": 0,
+            "ELITES": 0,
+            "SPECS": 0,
+            "IMAGES": 0
+        }
         
-        # Get active election IDs
+        # Get all active elections with their organization info
         active_elections_resp = supabase.table("elections")\
-            .select("id")\
+            .select("id, organization_id, organizations(name)")\
             .eq("status", "ongoing")\
             .execute()
         
         if active_elections_resp.data:
+            for election in active_elections_resp.data:
+                org_name = election["organizations"]["name"]
+                election_id = election["id"]
+                
+                # Count unique voters for this specific election
+                votes_resp = supabase.table("votes")\
+                    .select("student_id")\
+                    .eq("election_id", election_id)\
+                    .execute()
+                
+                # Get unique student IDs who voted in this election
+                unique_voters = set()
+                if votes_resp.data:
+                    for vote in votes_resp.data:
+                        unique_voters.add(vote["student_id"])
+                
+                if org_name in org_voted_counts:
+                    org_voted_counts[org_name] = len(unique_voters)
+        
+        # Get votes by program for overall statistics
+        voted_by_program = {"BSIT": 0, "BSCS": 0, "BSEMC": 0}
+        
+        if active_elections_resp.data:
             election_ids = [e["id"] for e in active_elections_resp.data]
             
-            # Get votes for active elections
+            # Get all votes for active elections with student program info
             votes_resp = supabase.table("votes")\
                 .select("student_id, students(program)")\
                 .in_("election_id", election_ids)\
                 .execute()
             
+            # Track unique voters per program across all active elections
+            program_voters = {"BSIT": set(), "BSCS": set(), "BSEMC": set()}
+            
             if votes_resp.data:
                 for vote in votes_resp.data:
                     program = vote["students"]["program"]
-                    if program in voted_by_program:
-                        voted_by_program[program] += 1
+                    student_id = vote["student_id"]
+                    if program in program_voters:
+                        program_voters[program].add(student_id)
+            
+            # Convert sets to counts
+            for program in voted_by_program:
+                voted_by_program[program] = len(program_voters[program])
         
         return {
             "totalVoters": total_voters,
             "candidates": candidates_by_org,
-            "voted": voted_by_program
+            "voted": voted_by_program,
+            "votersByProgram": voters_by_program,
+            "orgVoted": org_voted_counts,
+            "orgVoters": {
+                "CCS Student Council": total_voters,  # All students can vote for CCS SC
+                "ELITES": voters_by_program["BSIT"],  # Only BSIT for ELITES
+                "SPECS": voters_by_program["BSCS"],   # Only BSCS for SPECS
+                "IMAGES": voters_by_program["BSEMC"] # Only BSEMC for IMAGES
+            }
         }
     except Exception as e:
         print(f"Error in get_election_statistics: {str(e)}")

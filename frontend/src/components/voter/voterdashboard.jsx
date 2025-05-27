@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { 
   FaVoteYea, FaInfoCircle, FaClock, FaChevronRight, 
   FaRegListAlt, FaTimes, FaExclamationTriangle, FaCheckCircle,
@@ -8,7 +8,14 @@ import { useNavigate } from "react-router-dom";
 
 const VoterDashboard = () => {
   const navigate = useNavigate();
-  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Memoized helper functions
+  const getPhilippinesTime = useCallback(() => {
+    return new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Manila"}));
+  }, []);
+  
+  // State management
+  const [currentTime, setCurrentTime] = useState(getPhilippinesTime());
   const [animatedCards, setAnimatedCards] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipContent, setTooltipContent] = useState("");
@@ -17,6 +24,8 @@ const VoterDashboard = () => {
   const [showInstructionsModal, setShowInstructionsModal] = useState(false);
   const [studentInfo, setStudentInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [electionsLoading, setElectionsLoading] = useState(true);
+  const [voteStatusLoading, setVoteStatusLoading] = useState(true);
   const [filteredElections, setFilteredElections] = useState([]);
   const [error, setError] = useState(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -25,47 +34,336 @@ const VoterDashboard = () => {
   const [dbElectionIds, setDbElectionIds] = useState({});
   const modalRef = useRef(null);
   
-  // Check if mobile on resize
+  // Cache for API calls
+  const apiCache = useRef(new Map());
+  const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes cache
+  
+  // Loading Skeleton Component
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 animate-pulse overflow-hidden">
+      {/* Header Skeleton */}
+      <div className="h-24 bg-gradient-to-r from-gray-200 to-gray-300 relative">
+        <div className="absolute inset-0 flex items-center p-4">
+          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gray-300 mr-3 sm:mr-4"></div>
+          <div className="flex-1">
+            <div className="h-4 bg-gray-300 rounded w-3/4 mb-2"></div>
+            <div className="h-3 bg-gray-300 rounded w-1/2"></div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Content Skeleton */}
+      <div className="p-4 sm:p-5">
+        <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
+        <div className="h-3 bg-gray-200 rounded w-4/5 mb-4"></div>
+        
+        {/* Status Box Skeleton */}
+        <div className="bg-gray-100 p-3 rounded-lg mb-4">
+          <div className="h-2 bg-gray-200 rounded w-1/3 mb-2"></div>
+          <div className="h-6 bg-gray-200 rounded w-2/3 mx-auto"></div>
+        </div>
+        
+        {/* Button Skeleton */}
+        <div className="h-10 bg-gray-200 rounded w-full"></div>
+      </div>
+    </div>
+  );
+
+  // Loading Dots Component
+  const LoadingDots = ({ text = "Loading" }) => (
+    <div className="flex items-center justify-center space-x-1">
+      <span className="text-gray-600">{text}</span>
+      <div className="flex space-x-1">
+        <div className="w-1 h-1 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+        <div className="w-1 h-1 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+        <div className="w-1 h-1 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+      </div>
+    </div>
+  );
+
+  // Shimmer Effect Component
+  const ShimmerEffect = ({ className = "" }) => (
+    <div className={`animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:200%_100%] ${className}`} 
+         style={{ animation: 'shimmer 2s infinite' }}>
+    </div>
+  );
+
+  // Memoized constants
+  const organizationIds = useMemo(() => ({
+    "CCS Student Council": "20575c31-893e-47ba-9727-2e1c1c0500dd",
+    "ELITES": "c96c96d9-8eef-4914-ae18-89bbee67c97e",
+    "SPECS": "0aed0089-e798-48ee-bdfc-1ff32edb11d6",
+    "IMAGES": "5bd13196-8ce6-474d-b260-7c00297f306b"
+  }), []);
+
+  const organizationHelpers = useMemo(() => ({
+    getProgramFullName: (programCode) => {
+      const programs = {
+        "BSIT": "Bachelor of Science in Information Technology",
+        "BSCS": "Bachelor of Science in Computer Science",
+        "BSEMC": "Bachelor of Science in Entertainment and Multimedia Computing"
+      };
+      return programs[programCode] || programCode;
+    },
+    
+    getOrgGradient: (name) => {
+      const gradients = {
+        "CCS Student Council": "from-blue-100 to-gray-100",
+        "ELITES": "from-purple-100 to-gray-100",
+        "SPECS": "from-green-100 to-gray-100",
+        "IMAGES": "from-orange-100 to-gray-100"
+      };
+      return gradients[name] || "from-gray-100 to-gray-100";
+    },
+    
+    getOrgBorderColor: (name) => {
+      const colors = {
+        "CCS Student Council": "border-blue-600",
+        "ELITES": "border-purple-600",
+        "SPECS": "border-green-600",
+        "IMAGES": "border-orange-600"
+      };
+      return colors[name] || "border-gray-600";
+    },
+    
+    getOrganizationLogo: (name) => {
+      const logos = {
+        "CCS Student Council": "/assets/STUDENT-COUNCIL.jpg",
+        "ELITES": "/assets/ELITES.jpg",
+        "SPECS": "/assets/SPECS.jpg",
+        "IMAGES": "/assets/IMAGES.jpg"
+      };
+      return logos[name] || "/assets/default-org.jpg";
+    },
+    
+    getOrganizationDescription: (name) => {
+      const descriptions = {
+        "CCS Student Council": "Founded in 2013, Gordon College CCS Student Council is a recognized Student Society on Information Technology, Computer Science, and Entertainment and Multimedia Computing.",
+        "ELITES": "Founded in 2022, GCCCS ELITES (Empowered League of Information Technology Education Students) represents the collective voice of IT students at Gordon College.",
+        "SPECS": "Society of Programmers and Enthusiasts in Computer Science (SPECS) is the official organization for BSCS students at Gordon College.",
+        "IMAGES": "Interactive Media and Graphics Enthusiasts Society (IMAGES) serves as the premier organization for BSEMC students at Gordon College."
+      };
+      return descriptions[name] || "Student organization at Gordon College.";
+    }
+  }), []);
+
+  // Cached fetch function
+  const cachedFetch = useCallback(async (url, options = {}) => {
+    const cacheKey = `${url}-${JSON.stringify(options)}`;
+    const cached = apiCache.current.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return cached.data;
+    }
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          ...options.headers
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Cache successful responses
+      apiCache.current.set(cacheKey, {
+        data,
+        timestamp: Date.now()
+      });
+      
+      return data;
+    } catch (error) {
+      console.error(`Error fetching ${url}:`, error);
+      throw error;
+    }
+  }, []);
+
+  // Debounced resize handler
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
+    let timeoutId;
+    
+    const debouncedHandleResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setIsMobile(window.innerWidth < 768);
+      }, 150);
     };
     
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener('resize', debouncedHandleResize);
+    return () => {
+      window.removeEventListener('resize', debouncedHandleResize);
+      clearTimeout(timeoutId);
+    };
   }, []);
-  
-  // Fetch student info from API
+
+  // Optimized election data fetching
+  const fetchElectionData = useCallback(async (program, studentId) => {
+    try {
+      setElectionsLoading(true);
+      
+      // Fetch organizations data
+      const organizationsData = await cachedFetch('http://localhost:8000/api/v1/organizations');
+      
+      // Create elections with basic data first (for immediate display)
+      const elections = organizationsData.map(org => {
+        const eligiblePrograms = getEligiblePrograms(org.name);
+        const endTime = org.end_time ? new Date(org.end_time) : null;
+        
+        return {
+          id: organizationIds[org.name] || "unknown",
+          code: org.name.toLowerCase().replace(/\s+/g, '-'),
+          name: org.name,
+          logo: organizationHelpers.getOrganizationLogo(org.name),
+          description: organizationHelpers.getOrganizationDescription(org.name),
+          endTime: endTime,
+          bgGradient: organizationHelpers.getOrgGradient(org.name),
+          borderColor: organizationHelpers.getOrgBorderColor(org.name),
+          forPrograms: eligiblePrograms,
+          status: org.status || "not_started",
+          hasVoted: false, // Will be updated asynchronously
+          loadingVoteStatus: true // Loading indicator for vote status
+        };
+      });
+      
+      // Filter based on program immediately
+      const filtered = elections.filter(election => {
+        return election.name === "CCS Student Council" || 
+               election.forPrograms.includes(program);
+      });
+      
+      // Set filtered elections immediately for fast display
+      setFilteredElections(filtered);
+      setElectionsLoading(false);
+      
+      // Fetch additional data asynchronously
+      setVoteStatusLoading(true);
+      
+      try {
+        const [electionIds, voteStatuses] = await Promise.all([
+          fetchElectionIds(filtered),
+          fetchVoteStatus(filtered, studentId)
+        ]);
+        
+        setDbElectionIds(electionIds);
+        
+        // Update elections with vote status
+        setFilteredElections(prevElections => 
+          prevElections.map(election => ({
+            ...election,
+            hasVoted: voteStatuses[election.id] || false,
+            loadingVoteStatus: false
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching additional election data:", error);
+        // Update loading status even if fetch fails
+        setFilteredElections(prevElections => 
+          prevElections.map(election => ({
+            ...election,
+            loadingVoteStatus: false
+          }))
+        );
+      } finally {
+        setVoteStatusLoading(false);
+      }
+      
+    } catch (error) {
+      console.error("Error fetching election data:", error);
+      setFilteredElections([]);
+      setElectionsLoading(false);
+      setVoteStatusLoading(false);
+      throw error;
+    }
+  }, [cachedFetch, organizationIds, organizationHelpers]);
+
+  // Helper function to get eligible programs
+  const getEligiblePrograms = useCallback((orgName) => {
+    const programMap = {
+      "CCS Student Council": ["BSIT", "BSCS", "BSEMC"],
+      "ELITES": ["BSIT"],
+      "SPECS": ["BSCS"],
+      "IMAGES": ["BSEMC"]
+    };
+    return programMap[orgName] || [];
+  }, []);
+
+  // Separate function to fetch election IDs
+  const fetchElectionIds = useCallback(async (elections) => {
+    const electionIds = {};
+    
+    // Use Promise.allSettled to continue even if some fail
+    const promises = elections.map(async (election) => {
+      try {
+        const statusData = await cachedFetch(
+          `http://localhost:8000/api/v1/elections/status/${encodeURIComponent(election.name)}`
+        );
+        if (statusData.election_id) {
+          electionIds[election.id] = statusData.election_id;
+        }
+      } catch (error) {
+        console.error(`Error getting election ID for ${election.name}:`, error);
+      }
+    });
+    
+    await Promise.allSettled(promises);
+    return electionIds;
+  }, [cachedFetch]);
+
+  // Separate function to fetch vote status
+  const fetchVoteStatus = useCallback(async (elections, studentId) => {
+    if (!studentId) return {};
+    
+    const voteStatuses = {};
+    
+    // Check vote status for each election
+    const promises = elections.map(async (election) => {
+      try {
+        // First get the election ID
+        const statusData = await cachedFetch(
+          `http://localhost:8000/api/v1/elections/status/${encodeURIComponent(election.name)}`
+        );
+        
+        if (statusData.election_id) {
+          const voteData = await cachedFetch(
+            `http://localhost:8000/api/v1/votes/check-voted?election_id=${statusData.election_id}&student_id=${studentId}`
+          );
+          voteStatuses[election.id] = voteData.has_voted || false;
+        }
+      } catch (error) {
+        console.error(`Error checking vote status for ${election.name}:`, error);
+        voteStatuses[election.id] = false;
+      }
+    });
+    
+    await Promise.allSettled(promises);
+    return voteStatuses;
+  }, [cachedFetch]);
+
+  // Optimized user data fetching with parallel loading
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         setLoading(true);
         
-        // Real API call to fetch the current user's data
-        const response = await fetch('http://localhost:8000/api/v1/students/me', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
+        // Fetch user data
+        const userData = await cachedFetch('http://localhost:8000/api/v1/students/me');
         
-        if (!response.ok) {
-          throw new Error('Failed to fetch user data');
-        }
-        
-        const userData = await response.json();
-        
-        // Add full program name to userData
-        const programFullName = getProgramFullName(userData.program);
+        // Update student info immediately
         const enhancedUserData = {
           ...userData,
-          programFull: programFullName
+          programFull: organizationHelpers.getProgramFullName(userData.program)
         };
-        
         setStudentInfo(enhancedUserData);
-        
-        // After getting student info, fetch real election data
-        await fetchElectionData(userData.program);
         setLoading(false);
+        
+        // Fetch election data asynchronously
+        await fetchElectionData(userData.program, userData.id);
         
       } catch (error) {
         console.error("Error fetching user data:", error);
@@ -75,464 +373,238 @@ const VoterDashboard = () => {
     };
     
     fetchUserData();
-  }, []);
-  
-  // Add this function to convert program code to full name
-  const getProgramFullName = (programCode) => {
-    switch(programCode) {
-      case "BSIT":
-        return "Bachelor of Science in Information Technology";
-      case "BSCS":
-        return "Bachelor of Science in Computer Science";
-      case "BSEMC":
-        return "Bachelor of Science in Entertainment and Multimedia Computing";
-      default:
-        return programCode;
-    }
-  };
-  
-  // Organizations information with their IDs
-  const organizationIds = {
-    "CCS Student Council": "20575c31-893e-47ba-9727-2e1c1c0500dd",
-    "ELITES": "c96c96d9-8eef-4914-ae18-89bbee67c97e",
-    "SPECS": "0aed0089-e798-48ee-bdfc-1ff32edb11d6",
-    "IMAGES": "5bd13196-8ce6-474d-b260-7c00297f306b"
-  };
-  
-  // All available elections
-  const allElections = [
-    {
-      id: organizationIds["CCS Student Council"],
-      code: "ccs-student-council",
-      name: "CCS Student Council",
-      logo: "/assets/STUDENT-COUNCIL.jpg",
-      description: "Founded in 2013, Gordon College CCS Student Council is a recognized Student Society on Information Technology, Computer Science, and Entertainment and Multimedia Computing.",
-      endTime: (() => {
-        const date = new Date();
-        date.setHours(date.getHours() + 8);
-        return date;
-      })(),
-      bgGradient: "from-blue-100 to-gray-100",
-      borderColor: "border-blue-600",
-      forPrograms: ["ALL", "BSIT", "BSCS", "BSEMC"] // Available for all programs
-    },
-    {
-      id: organizationIds["ELITES"],
-      code: "elites",
-      name: "ELITES",
-      logo: "/assets/ELITES.jpg",
-      description: "Founded in 2022, GCCCS ELITES (Empowered League of Information Technology Education Students) represents the collective voice of IT students at Gordon College.",
-      endTime: (() => {
-        const date = new Date();
-        date.setHours(date.getHours() + 8);
-        return date;
-      })(),
-      bgGradient: "from-purple-100 to-gray-100",
-      borderColor: "border-purple-600",
-      forPrograms: ["BSIT"] // Only for BSIT students
-    },
-    {
-      id: organizationIds["SPECS"],
-      code: "specs",
-      name: "SPECS",
-      logo: "/assets/SPECS.jpg",
-      description: "Society of Programmers and Enthusiasts in Computer Science (SPECS) is the official organization for BSCS students at Gordon College.",
-      endTime: (() => {
-        const date = new Date();
-        date.setHours(date.getHours() + 8);
-        return date;
-      })(),
-      bgGradient: "from-green-100 to-gray-100",
-      borderColor: "border-green-600",
-      forPrograms: ["BSCS"] // Only for BSCS students
-    },
-    {
-      id: organizationIds["IMAGES"],
-      code: "images",
-      name: "IMAGES",
-      logo: "/assets/IMAGES.jpg",
-      description: "Interactive Media and Graphics Enthusiasts Society (IMAGES) serves as the premier organization for BSEMC students at Gordon College.",
-      endTime: (() => {
-        const date = new Date();
-        date.setHours(date.getHours() + 8);
-        return date;
-      })(),
-      bgGradient: "from-orange-100 to-gray-100",
-      borderColor: "border-orange-600",
-      forPrograms: ["BSEMC"] // Only for BSEMC students
-    }
-  ];
-  
-  // Function to filter elections based on program
-  const filterElectionsByProgram = (program) => {
-    const filtered = allElections.filter(election => 
-      election.forPrograms.includes("ALL") || election.forPrograms.includes(program)
-    );
-    setFilteredElections(filtered);
-  };
-  
-  // Update time every second
+  }, [cachedFetch, organizationHelpers.getProgramFullName, fetchElectionData]);
+
+  // Optimized timer updates - only when needed
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-  
+    let intervalId;
+    
+    const hasOngoingElections = filteredElections.some(election => 
+      election.status === "ongoing" && election.endTime
+    );
+    
+    if (hasOngoingElections && !loading) {
+      intervalId = setInterval(() => {
+        const philippinesTime = getPhilippinesTime();
+        setCurrentTime(philippinesTime);
+        
+        // Check if any elections have ended
+        setFilteredElections(prevElections => {
+          let hasChanges = false;
+          const updatedElections = prevElections.map(election => {
+            if (election.status === "ongoing" && election.endTime && philippinesTime >= election.endTime) {
+              hasChanges = true;
+              return { ...election, status: "finished" };
+            }
+            return election;
+          });
+          
+          return hasChanges ? updatedElections : prevElections;
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [filteredElections, loading, getPhilippinesTime]);
+
+  // Memoized time calculations
+  const timeHelpers = useMemo(() => ({
+    getRemainingTime: (endTime) => {
+      const philippinesTime = getPhilippinesTime();
+      const timeDiff = endTime - philippinesTime;
+      
+      if (timeDiff <= 0) return "Voting has ended";
+      
+      const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+      const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+      
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} remaining`;
+    },
+    
+    getFormattedDate: (date) => {
+      return new Date(date.toLocaleString("en-US", {timeZone: "Asia/Manila"})).toLocaleDateString('en-US', { 
+        month: 'long', 
+        day: 'numeric', 
+        year: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true,
+        timeZone: 'Asia/Manila'
+      });
+    }
+  }), [getPhilippinesTime]);
+
   // Animate cards on initial load
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setAnimatedCards(true);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Close modal when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (modalRef.current && !modalRef.current.contains(event.target)) {
-        setShowInstructionsModal(false);
-      }
-    };
-    
-    if (showInstructionsModal) {
-      document.addEventListener("mousedown", handleClickOutside);
+    if (!electionsLoading && filteredElections.length > 0) {
+      const timer = setTimeout(() => {
+        setAnimatedCards(true);
+      }, 100);
+      return () => clearTimeout(timer);
     }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showInstructionsModal]);
+  }, [electionsLoading, filteredElections.length]);
 
-  // Lock body scroll when modal is open
+  // Preload images
   useEffect(() => {
-    if (showInstructionsModal) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
+    if (filteredElections.length > 0) {
+      filteredElections.forEach(election => {
+        if (election.logo) {
+          const img = new Image();
+          img.src = election.logo;
+        }
+      });
     }
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, [showInstructionsModal]);
+  }, [filteredElections]);
 
-  // Function to navigate to voting interface
-  const handleStartVoting = (electionId) => {
-    // Log the navigation for debugging
-    console.log(`Navigating to voting interface for election: ${electionId}`);
+  // Event handlers
+  const handleStartVoting = useCallback((electionCode) => {
+    const election = filteredElections.find(e => e.code === electionCode);
     
-    // Make sure the election ID is valid
-    if (!electionId) {
-      console.error("Invalid election ID");
+    if (election?.hasVoted) {
+      alert("You have already voted in this election. You cannot vote again.");
       return;
     }
     
-    // Navigate to the voting interface with the election ID
-    navigate(`/voting-interface/${electionId}`);
-  };
+    if (election?.status !== "ongoing") {
+      alert("This election is not currently active for voting.");
+      return;
+    }
+    
+    navigate(`/voting-interface/${electionCode}`);
+  }, [filteredElections, navigate]);
 
-  // 2. Add function to fetch real election data
-  const fetchElectionData = async (program) => {
+  const handleViewReceipt = useCallback(async (electionId, dbElectionId) => {
     try {
-      // Fetch actual election status for each organization
-      const response = await fetch('http://localhost:8000/api/v1/organizations', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const actualElectionId = dbElectionId || dbElectionIds[electionId];
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch election data');
-      }
-      
-      const organizationsData = await response.json();
-      console.log("Organizations data:", organizationsData);
-      
-      // Create election cards with real data
-      const realElections = [];
-      
-      // Map the organization data to our election format
-      organizationsData.forEach(org => {
-        // Only include ongoing elections
-        if (org.status !== "ongoing") return;
-        
-        // Define which program can see which org election
-        let eligiblePrograms = [];
-        
-        // CCS Student Council is visible to all programs
-        if (org.name === "CCS Student Council") {
-          eligiblePrograms = ["BSIT", "BSCS", "BSEMC"];
-        } 
-        // Program-specific organizations
-        else if (org.name === "ELITES") {
-          eligiblePrograms = ["BSIT"];
-        } 
-        else if (org.name === "SPECS") {
-          eligiblePrograms = ["BSCS"];
-        } 
-        else if (org.name === "IMAGES") {
-          eligiblePrograms = ["BSEMC"];
-        }
-        
-        // Create election object
-        const election = {
-          id: organizationIds[org.name] || "unknown",
-          code: org.name.toLowerCase().replace(/\s+/g, '-'),
-          name: org.name,
-          logo: getOrganizationLogo(org.name),
-          description: getOrganizationDescription(org.name),
-          // Use real end time or fallback
-          endTime: org.end_time ? new Date(org.end_time) : addHours(new Date(), org.duration_hours || 8),
-          bgGradient: getOrgGradient(org.name),
-          borderColor: getOrgBorderColor(org.name),
-          forPrograms: eligiblePrograms,
-          status: org.status,
-          hasVoted: false // Initialize as false initially
-        };
-        
-        realElections.push(election);
-      });
-      
-      // If no real election data is available, show "No Elections Available" message
-      if (realElections.length === 0) {
-        console.log("No active elections found, showing empty state");
-        // Set to empty array to show the "No Elections Available" message
-        setFilteredElections([]);
+      if (!actualElectionId) {
+        alert("Receipt information unavailable. This might happen if the election data is still being processed. Please try again later.");
         return;
       }
       
-      // Filter the real elections based on program
-      const filtered = realElections.filter(election => {
-        // Always show CCS Student Council to everyone
-        if (election.name === "CCS Student Council") {
-          return true;
-        }
-        
-        // Show program-specific organizations
-        return election.forPrograms.includes(program);
-      });
+      setLoadingReceipt(true);
+      setShowReceiptModal(true);
       
-      console.log("Filtered elections for program", program, ":", filtered);
+      const data = await cachedFetch(
+        `http://localhost:8000/api/v1/votes/receipt?election_id=${actualElectionId}&student_id=${studentInfo.id}`
+      );
       
-      // IMPORTANT: Set filtered elections first with hasVoted=false for all
-      setFilteredElections(filtered);
+      const election = filteredElections.find(e => e.id === electionId);
       
-      // Then check if student has voted in a separate process
-      if (filtered.length > 0 && studentInfo?.id) {
-        const checkVoteStatuses = async () => {
-          try {
-            const votedElectionsIds = [];
-            const dbElectionIds = {};
-            
-            // First get all election DB IDs in parallel
-            const statusPromises = filtered.map(election => 
-              fetch(`http://localhost:8000/api/v1/elections/status/${election.name}`, {
-                headers: {
-                  'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-              })
-              .then(response => {
-                if (!response.ok) return null;
-                return response.json();
-              })
-              .then(data => {
-                if (data && data.election_id) {
-                  dbElectionIds[election.id] = data.election_id;
-                }
-                return data;
-              })
-              .catch(err => {
-                console.error(`Error getting election status for ${election.name}:`, err);
-                return null;
-              })
-            );
-            
-            await Promise.all(statusPromises);
-            setDbElectionIds(dbElectionIds);
-            
-            // Then check which elections the student has voted for
-            const voteCheckPromises = Object.entries(dbElectionIds).map(([electionId, dbId]) => 
-              fetch(`http://localhost:8000/api/v1/votes/check-voted?election_id=${dbId}&student_id=${studentInfo.id}`, {
-                headers: {
-                  'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-              })
-              .then(response => {
-                if (!response.ok) return { electionId, hasVoted: false };
-                return response.json().then(data => ({ electionId, hasVoted: data.has_voted }));
-              })
-              .catch(err => {
-                console.error(`Error checking vote status:`, err);
-                return { electionId, hasVoted: false };
-              })
-            );
-            
-            const voteResults = await Promise.all(voteCheckPromises);
-            
-            // Collect IDs of elections where student has voted
-            voteResults.forEach(result => {
-              if (result.hasVoted) {
-                votedElectionsIds.push(result.electionId);
-              }
-            });
-            
-            console.log("Elections where student has voted:", votedElectionsIds);
-            
-            // Update the state in a single call with the new hasVoted flags
-            setFilteredElections(prevElections => {
-              // First create a basic update using API results
-              const baseUpdate = prevElections.map(election => ({
-                ...election,
-                hasVoted: votedElectionsIds.includes(election.id)
-              }));
-              
-              // Then check localStorage as a backup for each election
-              return baseUpdate.map(election => {
-                // If already marked as voted via API, keep it that way
-                if (election.hasVoted) return election;
-                
-                // Check localStorage as backup
-                const hasVotedLocal = localStorage.getItem(`voted_${election.code}`) === 'true';
-                return { 
-                  ...election, 
-                  hasVoted: hasVotedLocal
-                };
-              });
-            });
-
-            // Additional check from localStorage for vote status (backup)
-            const updatedWithLocalStorage = prevElections.map(election => {
-              // First check API result
-              if (votedElectionsIds.includes(election.id)) {
-                return { ...election, hasVoted: true };
-              }
-              
-              // Then check localStorage as backup
-              const hasVotedLocal = localStorage.getItem(`voted_${election.code}`) === 'true';
-              return { 
-                ...election, 
-                hasVoted: hasVotedLocal || election.hasVoted || false 
-              };
-            });
-            
-            return updatedWithLocalStorage;
-          } catch (error) {
-            console.error("Error checking voted elections:", error);
-          }
-        };
-        
-        // CRITICAL FIX: Actually call the function
-        checkVoteStatuses();
+      if (!election) {
+        throw new Error('Election details not found');
       }
+      
+      // Process image URLs
+      if (data.votes) {
+        data.votes.forEach((vote) => {
+          if (vote.candidate_image) {
+            vote.candidate_image = processImageUrl(vote.candidate_image);
+          }
+        });
+      }
+      
+      setReceiptData({
+        election: election,
+        votes: data.votes || [],
+        votedAt: data.voted_at || new Date().toISOString(),
+        status: election.status
+      });
     } catch (error) {
-      console.error("Error fetching election data:", error);
-      setFilteredElections([]);
+      alert(`Could not load your vote receipt: ${error.message}`);
+      setShowReceiptModal(false);
+    } finally {
+      setLoadingReceipt(false);
     }
-  };
+  }, [dbElectionIds, studentInfo?.id, filteredElections, cachedFetch]);
 
-  // Helper function to add hours to date
-  const addHours = (date, hours) => {
-    const newDate = new Date(date);
-    newDate.setHours(newDate.getHours() + hours);
-    return newDate;
-  };
-
-  // Helper function for org gradients
-  const getOrgGradient = (name) => {
-    switch(name) {
-      case "CCS Student Council": return "from-blue-100 to-gray-100";
-      case "ELITES": return "from-purple-100 to-gray-100";
-      case "SPECS": return "from-green-100 to-gray-100";
-      case "IMAGES": return "from-orange-100 to-gray-100";
-      default: return "from-gray-100 to-gray-100";
-    }
-  };
-
-  // Helper function for org border colors
-  const getOrgBorderColor = (name) => {
-    switch(name) {
-      case "CCS Student Council": return "border-blue-600";
-      case "ELITES": return "border-purple-600";
-      case "SPECS": return "border-green-600";
-      case "IMAGES": return "border-orange-600";
-      default: return "border-gray-600";
-    }
-  };
-
-  // Helper function for org descriptions
-  const getOrganizationDescription = (name) => {
-    switch(name) {
-      case "CCS Student Council":
-        return "Founded in 2013, Gordon College CCS Student Council is a recognized Student Society on Information Technology, Computer Science, and Entertainment and Multimedia Computing.";
-      case "ELITES":
-        return "Founded in 2022, GCCCS ELITES (Empowered League of Information Technology Education Students) represents the collective voice of IT students at Gordon College.";
-      case "SPECS":
-        return "Society of Programmers and Enthusiasts in Computer Science (SPECS) is the official organization for BSCS students at Gordon College.";
-      case "IMAGES":
-        return "Interactive Media and Graphics Enthusiasts Society (IMAGES) serves as the premier organization for BSEMC students at Gordon College.";
-      default:
-        return "Student organization at Gordon College.";
-    }
-  };
-
-  // Helper function for org logos
-  const getOrganizationLogo = (name) => {
-    switch(name) {
-      case "CCS Student Council":
-        return "/assets/STUDENT-COUNCIL.jpg";
-      case "ELITES":
-        return "/assets/ELITES.jpg";
-      case "SPECS":
-        return "/assets/SPECS.jpg";
-      case "IMAGES":
-        return "/assets/IMAGES.jpg";
-      default:
-        return "/assets/default-org.jpg";
-    }
-  };
-
-  // Update the countdown timer function to get data from the backend
-  const getRemainingTime = (endTime) => {
-    const timeDiff = endTime - currentTime;
-    if (timeDiff <= 0) return "Voting has ended";
+  // Helper function to process image URLs
+  const processImageUrl = useCallback((imagePath) => {
+    if (!imagePath) return null;
     
-    // Convert to hours, minutes, seconds
-    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
-    const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+    const cleanPath = imagePath.trim();
     
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} remaining`;
-  };
-  
-  // Get formatted date
-  const getFormattedDate = (date) => {
-    return date.toLocaleDateString('en-US', { 
-      month: 'long', 
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      hour12: true
+    if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
+      return cleanPath;
+    } else if (cleanPath.startsWith('assets/')) {
+      return '/' + cleanPath;
+    } else if (!cleanPath.includes('/')) {
+      return '/assets/candidates/' + cleanPath;
+    } else if (!cleanPath.startsWith('/')) {
+      return '/' + cleanPath;
+    }
+    
+    return cleanPath;
+  }, []);
+
+  // Memoized sorted receipt votes
+  const sortedReceiptVotes = useMemo(() => {
+    if (!receiptData?.votes) return [];
+    
+    const positionOrder = {
+      'PRESIDENT': 1, 'VICE PRESIDENT': 2, 'SECRETARY': 3, 'TREASURER': 4,
+      'AUDITOR': 5, 'BUSINESS MANAGER': 6, 'P.R.O': 7, 'PRO': 7,
+      'PUBLIC RELATIONS OFFICER': 7, 'SENATOR': 8, 'REPRESENTATIVE': 9,
+      'GOVERNOR': 10, 'COUNCILOR': 11, 'SERGEANT AT ARMS': 12,
+      'MUSE': 13, 'ESCORT': 14
+    };
+    
+    return [...receiptData.votes].sort((a, b) => {
+      const orderA = positionOrder[a.position.toUpperCase()] || 999;
+      const orderB = positionOrder[b.position.toUpperCase()] || 999;
+      
+      if (orderA === orderB) {
+        return a.position.localeCompare(b.position);
+      }
+      
+      return orderA - orderB;
     });
-  };
+  }, [receiptData]);
 
-  // Show tooltip with information about a term
-  const handleInfoHover = (e, content) => {
-    setTooltipContent(content);
-    setTooltipPosition({ x: e.clientX, y: e.clientY });
-    setShowTooltip(true);
-  };
-
-  // Open instructions modal
-  const handleOpenInstructionsModal = (e) => {
+  // Modal event handlers
+  const handleOpenInstructionsModal = useCallback((e) => {
     e.preventDefault();
     setShowInstructionsModal(true);
-  };
+  }, []);
 
-  // Loading state
+  // Main loading screen with enhanced skeleton
   if (loading) {
     return (
-      <div className="bg-gray-50 min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <FaSpinner className="animate-spin text-orange-500 text-4xl mx-auto mb-4" />
-          <p className="text-gray-600">Loading your dashboard...</p>
+      <div className="bg-gray-50 min-h-screen">
+        <div className="p-3 sm:p-5">
+          {/* Skeleton Welcome Banner */}
+          <div className="bg-gradient-to-r from-orange-100 to-gray-100 p-4 sm:p-6 rounded-xl shadow-md border border-gray-200 mb-4 sm:mb-6 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-orange-300"></div>
+            <div className="animate-pulse">
+              <div className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            </div>
+            <div className="absolute bottom-0 right-0 opacity-10">
+              <FaVoteYea size={80} className="text-gray-400" />
+            </div>
+          </div>
+          
+          {/* Skeleton Elections Header */}
+          <div className="flex items-center mb-4">
+            <div className="animate-pulse">
+              <div className="h-6 bg-gray-200 rounded w-48"></div>
+            </div>
+          </div>
+          
+          {/* Skeleton Elections Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+          
+          {/* Loading indicator */}
+          <div className="mt-8 text-center">
+            <LoadingDots text="Loading your dashboard" />
+          </div>
         </div>
       </div>
     );
@@ -557,49 +629,16 @@ const VoterDashboard = () => {
     );
   }
 
-  const handleViewReceipt = async (electionId, dbElectionId) => {
-    try {
-      // Check if dbElectionId exists
-      if (!dbElectionId) {
-        console.error(`No database ID found for election ${electionId}`);
-        alert("Receipt information unavailable. Please try again later.");
-        return;
-      }
-      
-      setLoadingReceipt(true);
-      setShowReceiptModal(true);
-      
-      // Fetch the vote receipt data
-      const receiptResponse = await fetch(`http://localhost:8000/api/v1/votes/receipt?election_id=${dbElectionId}&student_id=${studentInfo.id}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (!receiptResponse.ok) {
-        throw new Error('Failed to load your vote receipt');
-      }
-      
-      const data = await receiptResponse.json();
-      
-      // Find the election details
-      const election = filteredElections.find(e => e.id === electionId);
-      
-      // Set the receipt data with election details
-      setReceiptData({
-        election: election,
-        votes: data.votes || []
-      });
-    } catch (error) {
-      console.error("Error fetching vote receipt:", error);
-      alert("Could not load your vote receipt. Please try again later.");
-    } finally {
-      setLoadingReceipt(false);
-    }
-  };
-
   return (
     <div className="bg-gray-50 min-h-screen">
+      {/* Add shimmer animation CSS */}
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+      `}</style>
+      
       {/* Main Content */}
       <div className="p-3 sm:p-5">
         {/* Welcome Banner */}
@@ -607,20 +646,20 @@ const VoterDashboard = () => {
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-orange-300"></div>
           <div className="relative z-10">
             <h1 className="text-lg sm:text-2xl font-bold text-gray-800 mb-1 sm:mb-2 flex items-center">
-              Welcome, <span className="text-orange-600 ml-1">{studentInfo.fullName}!</span>
+              Welcome, <span className="text-orange-600 ml-1">{studentInfo?.fullName}!</span>
             </h1>
             {isMobile ? (
               <>
                 <p className="text-xs text-gray-600 font-medium">
-                  {studentInfo.programFull}
+                  {studentInfo?.programFull}
                 </p>
                 <p className="text-xs text-gray-600">
-                  {studentInfo.year_level} • ID: {studentInfo.student_no}
+                  {studentInfo?.year_level} • ID: {studentInfo?.student_no}
                 </p>
               </>
             ) : (
               <p className="text-sm text-gray-600">
-                <span className="font-medium">{studentInfo.programFull}</span> • {studentInfo.year_level} • ID: {studentInfo.student_no}
+                <span className="font-medium">{studentInfo?.programFull}</span> • {studentInfo?.year_level} • ID: {studentInfo?.student_no}
               </p>
             )}
           </div>
@@ -631,105 +670,188 @@ const VoterDashboard = () => {
 
         <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-3 sm:mb-4 flex items-center">
           <FaVoteYea className="mr-2 text-orange-600" /> Available Elections
+          {electionsLoading && (
+            <FaSpinner className="ml-2 animate-spin text-orange-500 text-sm" />
+          )}
         </h2>
         
-        {filteredElections.length === 0 ? (
+        {/* Show loading state for elections */}
+        {electionsLoading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            {[1, 2].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        ) : filteredElections.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm p-8 text-center border border-gray-200">
             <FaInfoCircle className="text-orange-500 text-3xl mx-auto mb-3" />
             <h3 className="text-lg font-medium text-gray-800 mb-2">No Elections Available</h3>
             <p className="text-sm text-gray-600">There are currently no active elections available for your program.</p>
           </div>
         ) : (
-          /* Cards Section - Responsive grid */
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-            {filteredElections.map((election, index) => (
-              <div 
-                key={election.id}
-                className={`card bg-white rounded-xl shadow-sm hover:shadow-lg border border-gray-200 transition-all duration-300 h-full transform ${
-                  animatedCards ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
-                } group overflow-hidden`}
-                style={{ transitionDelay: `${index * 150}ms` }}
-              >
-                <div className={`flex items-center justify-between p-4 sm:p-5 bg-gradient-to-r ${election.bgGradient} rounded-t-xl relative`}>
-                  <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/0 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  <div className="flex items-center relative z-10">
-                    <div className={`w-12 h-12 sm:w-16 sm:h-16 md:w-18 md:h-18 rounded-full overflow-hidden border-3 sm:border-4 ${election.borderColor} mr-3 sm:mr-4 shadow-md group-hover:shadow-lg transition-all`}>
-                      <img
-                        src={election.logo}
-                        alt={election.name}
-                        className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
-                        onError={(e) => {
-                          console.log(`Failed to load image for ${election.name}`);
-                          e.target.onerror = null;
-                          e.target.src = "/assets/default-org.jpg"; // Fallback image
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <h3 className="text-base sm:text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">{election.name}</h3>
-                      <div className="flex items-center mt-1">
-                        <span className="bg-green-500 text-white text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full flex items-center">
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-white mr-1 animate-pulse"></span>
-                          Ongoing
-                        </span>
-                        <span className="text-[10px] sm:text-xs text-gray-500 ml-2">
-                          Ends: {getFormattedDate(election.endTime)}
-                        </span>
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {filteredElections.map((election, index) => (
+                <div 
+                  key={election.id}
+                  className={`card bg-white rounded-xl shadow-sm hover:shadow-lg border border-gray-200 transition-all duration-300 h-full transform ${
+                    animatedCards ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'
+                  } group overflow-hidden`}
+                  style={{ transitionDelay: `${index * 150}ms` }}
+                >
+                  <div className={`flex items-center justify-between p-4 sm:p-5 bg-gradient-to-r ${election.bgGradient} rounded-t-xl relative`}>
+                    <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/0 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="flex items-center relative z-10">
+                      <div className={`w-12 h-12 sm:w-16 sm:h-16 md:w-18 md:h-18 rounded-full overflow-hidden border-3 sm:border-4 ${election.borderColor} mr-3 sm:mr-4 shadow-md group-hover:shadow-lg transition-all`}>
+                        <img
+                          src={election.logo}
+                          alt={election.name}
+                          className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-500"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "/assets/default-org.jpg";
+                          }}
+                        />
                       </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="p-4 sm:p-5 flex flex-col">
-                  <p className="text-gray-600 text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-2">
-                    {election.description}
-                  </p>
-                  
-                  {/* Simplified Countdown Timer */}
-                  <div className="bg-gray-50 p-3 rounded-lg mb-4 sm:mb-5 border border-gray-100">
-                    <h4 className="text-[10px] sm:text-xs text-gray-500 mb-1.5 flex items-center">
-                      <FaClock className="mr-1.5 text-orange-500" /> TIME REMAINING
-                    </h4>
-                    <div className="flex items-center justify-center">
-                      <div className="inline-flex bg-white px-3 py-2 rounded-lg border border-orange-100 shadow-sm">
-                        <span className="text-sm sm:text-base font-medium text-orange-600 tracking-wider animate-pulse-subtle">
-                          {getRemainingTime(election.endTime)}
-                        </span>
+                      <div>
+                        <h3 className="text-base sm:text-xl font-bold text-gray-800 group-hover:text-gray-900 transition-colors">{election.name}</h3>
+                        <div className="flex items-center mt-1">
+                          {election.status === "ongoing" && (
+                            <span className="bg-green-500 text-white text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full flex items-center">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-white mr-1 animate-pulse"></span>
+                              Ongoing
+                            </span>
+                          )}
+                          {election.status === "not_started" && (
+                            <span className="bg-gray-500 text-white text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full flex items-center">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-white mr-1"></span>
+                              Not Yet Started
+                            </span>
+                          )}
+                          {election.status === "finished" && (
+                            <span className="bg-blue-500 text-white text-[10px] sm:text-xs font-semibold px-1.5 sm:px-2 py-0.5 rounded-full flex items-center">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-white mr-1"></span>
+                              Finished
+                            </span>
+                          )}
+                          {election.status === "ongoing" && election.endTime && (
+                            <span className="text-[10px] sm:text-xs text-gray-500 ml-2">
+                              Ends: {timeHelpers.getFormattedDate(election.endTime)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                   
-                  {/* Action buttons */}
-                  <div className="mt-auto">
-                    {election.hasVoted ? (
-                      <div className="flex flex-col space-y-2">
-                        <button
-                          disabled
-                          className="flex items-center justify-center px-4 sm:px-5 py-2.5 sm:py-3 bg-gray-400 text-white text-xs sm:text-sm rounded-lg w-full cursor-not-allowed opacity-90"
-                          style={{pointerEvents: 'none'}}
-                        >
-                          <FaCheckCircle className="mr-2" /> Already Voted
-                        </button>
-                        <button
-                          onClick={() => handleViewReceipt(election.id, dbElectionIds[election.id])}
-                          className="flex items-center justify-center px-4 sm:px-5 py-1.5 sm:py-2 bg-blue-500 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-600 transition-all w-full"
-                        >
-                          <FaReceipt className="mr-2" /> View Receipt
-                        </button>
+                  <div className="p-4 sm:p-5 flex flex-col">
+                    <p className="text-gray-600 text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-2">
+                      {election.description}
+                    </p>
+                    
+                    {election.status === "ongoing" && election.endTime && (
+                      <div className="bg-gray-50 p-3 rounded-lg mb-4 sm:mb-5 border border-gray-100">
+                        <h4 className="text-[10px] sm:text-xs text-gray-500 mb-1.5 flex items-center">
+                          <FaClock className="mr-1.5 text-orange-500" /> TIME REMAINING
+                        </h4>
+                        <div className="flex items-center justify-center">
+                          <div className="inline-flex bg-white px-3 py-2 rounded-lg border border-orange-100 shadow-sm">
+                            <span className="text-sm sm:text-base font-medium text-orange-600 tracking-wider animate-pulse-subtle">
+                              {timeHelpers.getRemainingTime(election.endTime)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => handleStartVoting(election.code)}
-                        className="flex items-center justify-center px-4 sm:px-5 py-2.5 sm:py-3 bg-orange-600 text-white text-xs sm:text-sm rounded-lg hover:bg-orange-700 transition-all w-full shadow-sm hover:shadow-md hover:translate-y-[-1px] active:translate-y-[1px]"
-                      >
-                        <FaVoteYea className="mr-2" /> Start Voting
-                      </button>
                     )}
+                    
+                    {(election.status !== "ongoing" || election.hasVoted) && (
+                      <div className="bg-gray-50 p-3 rounded-lg mb-4 sm:mb-5 border border-gray-100">
+                        <h4 className="text-[10px] sm:text-xs text-gray-500 mb-1.5 flex items-center">
+                          <FaInfoCircle className="mr-1.5 text-blue-500" /> STATUS
+                        </h4>
+                        <div className="flex items-center justify-center">
+                          <div className="inline-flex bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
+                            {election.loadingVoteStatus ? (
+                              <div className="flex items-center">
+                                <FaSpinner className="animate-spin text-gray-500 mr-2" />
+                                <span className="text-sm text-gray-500">Checking status...</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm sm:text-base font-medium text-gray-700">
+                                {election.hasVoted && "You have already voted"}
+                                {!election.hasVoted && election.status === "not_started" && "Election has not started yet"}
+                                {!election.hasVoted && election.status === "finished" && "Election has ended"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="mt-auto">
+                      {election.loadingVoteStatus ? (
+                        <div className="flex items-center justify-center px-4 sm:px-5 py-2.5 sm:py-3 bg-gray-200 text-gray-500 text-xs sm:text-sm rounded-lg w-full">
+                          <FaSpinner className="animate-spin mr-2" />
+                          Loading...
+                        </div>
+                      ) : election.hasVoted ? (
+                        <div className="flex flex-col space-y-2">
+                          <button
+                            disabled
+                            className="flex items-center justify-center px-4 sm:px-5 py-2.5 sm:py-3 bg-green-400 text-white text-xs sm:text-sm rounded-lg w-full cursor-not-allowed opacity-75"
+                          >
+                            <FaCheckCircle className="mr-2" /> Already Voted
+                          </button>
+                          <button
+                            onClick={() => handleViewReceipt(election.id, dbElectionIds[election.id])}
+                            className="flex items-center justify-center px-4 sm:px-5 py-1.5 sm:py-2 bg-blue-500 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-600 transition-all w-full shadow-sm hover:shadow-md"
+                          >
+                            <FaReceipt className="mr-2" /> View Receipt
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {election.status === "ongoing" && (
+                            <button
+                              onClick={() => handleStartVoting(election.code)}
+                              className="flex items-center justify-center px-4 sm:px-5 py-2.5 sm:py-3 bg-orange-600 text-white text-xs sm:text-sm rounded-lg hover:bg-orange-700 transition-all w-full shadow-sm hover:shadow-md hover:translate-y-[-1px] active:translate-y-[1px]"
+                            >
+                              <FaVoteYea className="mr-2" /> Start Voting
+                            </button>
+                          )}
+                          
+                          {election.status === "not_started" && (
+                            <button
+                              disabled
+                              className="flex items-center justify-center px-4 sm:px-5 py-2.5 sm:py-3 bg-gray-400 text-white text-xs sm:text-sm rounded-lg w-full cursor-not-allowed opacity-75"
+                            >
+                              <FaInfoCircle className="mr-2" /> Not Yet Started
+                            </button>
+                          )}
+                          
+                          {election.status === "finished" && (
+                            <button
+                              disabled
+                              className="flex items-center justify-center px-4 sm:px-5 py-2.5 sm:py-3 bg-red-400 text-white text-xs sm:text-sm rounded-lg w-full cursor-not-allowed opacity-75"
+                            >
+                              <FaExclamationTriangle className="mr-2" /> Election Ended - Missed
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+            
+            {/* Vote status loading indicator */}
+            {voteStatusLoading && (
+              <div className="mt-4 text-center">
+                <LoadingDots text="Checking your vote status" />
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         {/* Information Box */}
@@ -761,22 +883,8 @@ const VoterDashboard = () => {
         </div>
       </div>
       
-      {/* Tooltip */}
-      {showTooltip && (
-        <div 
-          className="fixed bg-gray-900 text-white text-[10px] sm:text-xs rounded-lg py-1.5 px-3 z-50 max-w-xs pointer-events-none shadow-lg"
-          style={{ 
-            left: `${tooltipPosition.x + 15}px`, 
-            top: `${tooltipPosition.y - 20}px`,
-            opacity: 0.9
-          }}
-        >
-          {tooltipContent}
-          <div className="absolute left-0 top-1/2 -ml-2 -mt-1 border-t-2 border-r-2 border-transparent border-r-gray-900" style={{ transform: "rotate(45deg)" }}></div>
-        </div>
-      )}
-
-      {/* Instructions Modal - Unchanged */}
+      {/* Modals - keeping existing modal code */}
+      {/* Instructions Modal */}
       {showInstructionsModal && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/20 flex items-center justify-center z-50 animate-fadeIn">
           <div 
@@ -793,7 +901,6 @@ const VoterDashboard = () => {
               <button 
                 onClick={() => setShowInstructionsModal(false)}
                 className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
-                aria-label="Close modal"
               >
                 <FaTimes className="text-gray-500" />
               </button>
@@ -882,78 +989,97 @@ const VoterDashboard = () => {
       {/* Vote Receipt Modal */}
       {showReceiptModal && receiptData && (
         <div className="fixed inset-0 backdrop-blur-sm bg-black/20 flex items-center justify-center z-50 animate-fadeIn">
-          <div 
-            className="bg-white rounded-xl shadow-xl max-w-2xl w-11/12 md:w-3/4 lg:w-2/3 animate-scaleIn m-3 max-h-[90vh] overflow-hidden flex flex-col"
-          >
-            <div className="p-4 sm:p-5 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
-              <div className="flex items-center">
-                <div className={`w-10 h-10 ${receiptData.election.borderColor} bg-gray-100 rounded-full flex items-center justify-center mr-3 border-2`}>
-                  <FaReceipt className="text-gray-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-800">Your Vote Receipt</h3>
-                  <p className="text-sm text-gray-500">{receiptData.election.name} Election</p>
-                </div>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-11/12 animate-scaleIn m-3 max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 text-center border-b border-dashed border-gray-300">
+              <div className="flex items-center justify-center mb-2">
+                <FaReceipt className="text-gray-600 text-xl mr-2" />
+                <h3 className="text-lg font-bold text-gray-800">VOTE RECEIPT</h3>
               </div>
-              <button 
-                onClick={() => setShowReceiptModal(false)}
-                className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
-                aria-label="Close modal"
-              >
-                <FaTimes className="text-gray-500" />
-              </button>
+              <div className="text-sm text-gray-600 space-y-1">
+                <p className="font-semibold">{receiptData.election.name.toUpperCase()}</p>
+                <p>Election Receipt</p>
+                <p className="text-xs">
+                  Date: {new Date(receiptData.votedAt).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Manila'
+                  })}
+                </p>
+              </div>
             </div>
             
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+            <div className="p-4 overflow-y-auto flex-1 font-mono text-sm">
               {loadingReceipt ? (
-                <div className="flex justify-center py-8">
-                  <FaSpinner className="animate-spin text-blue-500 text-3xl" />
+                <div className="flex flex-col items-center justify-center py-8">
+                  <FaSpinner className="animate-spin text-blue-500 text-2xl mb-4" />
+                  <LoadingDots text="Loading your receipt" />
                 </div>
               ) : (
-                <div className="space-y-6">
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                    <div className="flex items-start">
-                      <FaInfoCircle className="text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
-                      <p className="text-sm text-blue-700">
-                        This is a record of your votes for this election. Your votes have been securely recorded and cannot be changed.
-                      </p>
+                <div className="space-y-4">
+                  <div className="border-b border-dashed border-gray-300 pb-2">
+                    <p className="text-center text-xs text-gray-500 uppercase tracking-wider">
+                      Your Votes
+                    </p>
+                  </div>
+                  
+                  {sortedReceiptVotes.map((vote, index) => (
+                    <div key={index} className="border-b border-dotted border-gray-200 pb-3 mb-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-800 text-xs uppercase tracking-wide">
+                            {vote.position}
+                          </p>
+                          <p className="text-gray-700 mt-1 break-words">
+                            {vote.candidate_name}
+                          </p>
+                        </div>
+                        <div className="ml-2 text-right">
+                          <span className="text-green-600 font-bold">✓</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {sortedReceiptVotes.length === 0 && (
+                    <div className="text-center py-6 text-gray-500">
+                      <FaExclamationTriangle className="mx-auto text-yellow-500 text-xl mb-2" />
+                      <p className="text-sm">No votes recorded</p>
+                    </div>
+                  )}
+                  
+                  <div className="border-t border-double border-gray-400 pt-3 mt-4">
+                    <div className="flex justify-between text-xs text-gray-600">
+                      <span>TOTAL POSITIONS:</span>
+                      <span>{sortedReceiptVotes.length}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-600 mt-1">
+                      <span>STATUS:</span>
+                      <span className="font-semibold text-green-600">COMPLETED</span>
                     </div>
                   </div>
                   
-                  <div className="divide-y divide-gray-200">
-                    {receiptData.votes.map((vote, index) => (
-                      <div key={index} className="py-4">
-                        <h4 className="text-base font-medium text-gray-800 mb-2">{vote.position}</h4>
-                        <div className="ml-4 bg-gray-50 p-3 rounded-md border border-gray-200">
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 bg-white rounded-full border border-gray-300 overflow-hidden mr-3">
-                              {vote.candidate_image ? (
-                                <img src={vote.candidate_image} alt={vote.candidate_name} className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500">
-                                  {vote.candidate_name.charAt(0)}
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{vote.candidate_name}</p>
-                              <p className="text-xs text-gray-500">{vote.party}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="border-t border-dashed border-gray-300 pt-3 mt-4 text-center">
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      *** OFFICIAL VOTING RECEIPT ***<br/>
+                      Your vote has been recorded securely.<br/>
+                      This receipt is for your records only.<br/>
+                      Changes cannot be made after submission.
+                    </p>
                   </div>
                 </div>
               )}
             </div>
             
-            <div className="p-4 sm:p-5 border-t border-gray-200 bg-gray-50 flex justify-end">
+            <div className="p-3 border-t border-dashed border-gray-300 bg-gray-50 text-center">
+              <p className="text-xs text-gray-500 mb-3">
+                Thank you for participating in the election!
+              </p>
               <button
                 onClick={() => setShowReceiptModal(false)}
-                className="px-4 sm:px-6 py-2 bg-gray-600 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors shadow-sm"
+                className="px-6 py-2 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition-colors"
               >
-                Close
+                Close Receipt
               </button>
             </div>
           </div>

@@ -92,31 +92,34 @@ async def submit_votes(
             detail=f"Error recording votes: {str(e)}"
         )
 
-# Add this endpoint if you haven't already
+# Add this new endpoint to check if a student has voted:
 
 @router.get("/check-voted")
-async def check_if_voted(
+async def check_if_student_voted(
     election_id: str,
     student_id: str,
     token: str = Depends(oauth2_scheme)
 ):
-    """Check if a student has already voted in a specific election"""
+    """Check if a specific student has voted in a specific election"""
     try:
-        # Query existing votes
+        print(f"Checking vote status for election_id: '{election_id}', student_id: '{student_id}'")
+        
+        # Check if there are any votes for this student in this election
         existing_vote = supabase.table("votes")\
             .select("id")\
             .eq("election_id", election_id)\
             .eq("student_id", student_id)\
+            .limit(1)\
             .execute()
         
-        # Log the result for debugging
         has_voted = len(existing_vote.data) > 0
-        print(f"Check if student {student_id} has voted in election {election_id}: {has_voted}")
+        
+        print(f"Vote check result: has_voted = {has_voted}, found {len(existing_vote.data)} records")
         
         return {
-            "has_voted": has_voted,
             "election_id": election_id,
-            "student_id": student_id
+            "student_id": student_id,
+            "has_voted": has_voted
         }
     
     except Exception as e:
@@ -126,6 +129,8 @@ async def check_if_voted(
             detail=f"Error checking vote status: {str(e)}"
         )
 
+# Replace the get_vote_receipt function:
+
 @router.get("/receipt")
 async def get_vote_receipt(
     election_id: str,
@@ -134,11 +139,14 @@ async def get_vote_receipt(
 ):
     """Get a receipt of a student's votes for a specific election"""
     try:
+        print(f"Getting vote receipt for election_id: {election_id}, student_id: {student_id}")
+        
         # First check if the student has voted
         existing_vote = supabase.table("votes")\
-            .select("id")\
+            .select("id, created_at")\
             .eq("election_id", election_id)\
             .eq("student_id", student_id)\
+            .limit(1)\
             .execute()
         
         if not existing_vote.data:
@@ -147,28 +155,74 @@ async def get_vote_receipt(
                 detail="No votes found for this election"
             )
         
-        # Get the candidate details for each vote
+        print(f"Found existing vote: {existing_vote.data}")
+        
+        # Get the candidate details for each vote with proper image handling
         votes_with_details = supabase.table("votes")\
-            .select("votes.id, votes.candidate_id, candidates.name as candidate_name, candidates.position, candidates.party, candidates.image_url as candidate_image")\
-            .eq("votes.election_id", election_id)\
-            .eq("votes.student_id", student_id)\
-            .join("candidates", "votes.candidate_id", "candidates.id")\
+            .select("id, candidate_id, created_at, candidates(id, name, position, photo_url)")\
+            .eq("election_id", election_id)\
+            .eq("student_id", student_id)\
             .execute()
+        
+        print(f"Votes with details raw: {votes_with_details}")
         
         # Format the vote data for the receipt
         formatted_votes = []
-        for vote in votes_with_details.data:
-            formatted_votes.append({
-                "position": vote["position"],
-                "candidate_name": vote["candidate_name"],
-                "party": vote["party"],
-                "candidate_image": vote["candidate_image"]
-            })
+        voted_at = None
+        
+        if votes_with_details.data:
+            for vote in votes_with_details.data:
+                if not voted_at:
+                    voted_at = vote["created_at"]
+                
+                candidate = vote.get("candidates")
+                if candidate:  # Make sure candidate data exists
+                    # Process the candidate image URL
+                    candidate_image = None
+                    raw_photo_url = candidate.get("photo_url")
+                    
+                    print(f"Processing candidate: {candidate.get('name')}, Raw photo URL: {raw_photo_url}")
+                    
+                    if raw_photo_url and raw_photo_url.strip():
+                        # Clean the photo URL
+                        cleaned_url = raw_photo_url.strip()
+                        
+                        # Handle different URL formats
+                        if cleaned_url.startswith('http://') or cleaned_url.startswith('https://'):
+                            # Already a full URL
+                            candidate_image = cleaned_url
+                        elif cleaned_url.startswith('/assets/'):
+                            # Already properly formatted relative path
+                            candidate_image = cleaned_url
+                        elif cleaned_url.startswith('assets/'):
+                            # Add leading slash
+                            candidate_image = '/' + cleaned_url
+                        elif '/' not in cleaned_url:
+                            # Just a filename, assume it's in candidates folder
+                            candidate_image = f'/assets/candidates/{cleaned_url}'
+                        else:
+                            # Other relative path, ensure it starts with /
+                            candidate_image = '/' + cleaned_url if not cleaned_url.startswith('/') else cleaned_url
+                        
+                        print(f"Processed candidate image URL: {candidate_image}")
+                    else:
+                        print(f"No photo URL found for candidate: {candidate.get('name')}")
+                    
+                    formatted_votes.append({
+                        "position": candidate.get("position", "Unknown Position"),
+                        "candidate_name": candidate.get("name", "Unknown Candidate"),
+                        "candidate_id": candidate.get("id"),
+                        "candidate_image": candidate_image
+                    })
+                else:
+                    print(f"No candidate data found for vote: {vote}")
+        
+        print(f"Final formatted votes: {formatted_votes}")
         
         return {
             "election_id": election_id,
             "student_id": student_id,
-            "timestamp": datetime.now().isoformat(),
+            "voted_at": voted_at or existing_vote.data[0]["created_at"],
             "votes": formatted_votes
         }
     
