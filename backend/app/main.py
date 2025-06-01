@@ -7,11 +7,16 @@ from pathlib import Path
 
 app = FastAPI(title="EasyVote API")
 
-
-# IMPORTANT: CORS middleware must be added BEFORE routers
+# IMPORTANT: Update CORS to allow your Vercel frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or ["*"] for all origins (not recommended for production)
+    allow_origins=[
+        "https://easyvote-deploy.vercel.app",
+        "https://*.vercel.app",  # Allow all Vercel preview deployments
+        "http://localhost:3000",  # For local development
+        "http://localhost:5173",  # For Vite dev server
+        "http://localhost:8000",  # For local backend testing
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

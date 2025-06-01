@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Header from "./header";
+import PartylistDropdown from "./PartylistDropdown";
 import { 
   FaSearch, FaPaperclip, FaSort, FaFilter, FaEdit, FaArchive, 
   FaUserEdit, FaImage, FaCheckCircle, FaTimes, 
@@ -25,6 +26,7 @@ const ViewCandidate = () => {
   }, []);
 
   const [candidates, setCandidates] = useState([]);
+  const [partylists, setPartylists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortDirection, setSortDirection] = useState("asc");
@@ -97,7 +99,9 @@ const ViewCandidate = () => {
         photo_url: c.photo_url,
         photoUrl: c.photo_url.startsWith('http') 
           ? c.photo_url 
-          : `${API_BASE_URL.replace('/api/v1', '')}${c.photo_url}`
+          : `${API_BASE_URL.replace('/api/v1', '')}${c.photo_url}`,
+        partylist_id: c.partylist_id || '', // Include partylist_id
+        partylist: c.partylist || '' // Include partylist name
       }));
       
       setCandidates(formattedCandidates);
@@ -112,9 +116,34 @@ const ViewCandidate = () => {
     }
   };
   
-  // Load candidates on component mount
+  // Load partylists from backend
+  const [partylistError, setPartylistError] = useState(null);
+
+  const fetchPartylists = async () => {
+    try {
+      setPartylistError(null);
+      const response = await fetch(`${API_BASE_URL}/partylists`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load partylists');
+      }
+      
+      const data = await response.json();
+      setPartylists(data);
+    } catch (error) {
+      console.error("Error loading partylists:", error);
+      setPartylistError("Failed to load partylists. Using cached data if available.");
+    }
+  };
+
+  // Load candidates and partylists on component mount
   useEffect(() => {
     loadCandidates();
+    fetchPartylists();
   }, []);
 
   // Update items per page when screen size changes
@@ -270,8 +299,9 @@ const ViewCandidate = () => {
     const candidate = candidates.find((c) => c.id === id);
     if (candidate) {
       setCurrentCandidate({ ...candidate });
-      setOriginalCandidateData({ ...candidate }); // Store original data for comparison
+      setOriginalCandidateData({ ...candidate });
       setPhotoName(candidate.photo);
+      fetchPartylists(); // Ensure we have fresh partylist data
       setIsUpdateModalOpen(true);
     }
   };
@@ -376,9 +406,10 @@ const ViewCandidate = () => {
     try {
       // Create FormData for the API request
       const formData = new FormData();
-      formData.append('name', currentCandidate.name.toUpperCase()); // Ensure uppercase
+      formData.append('name', currentCandidate.name.toUpperCase());
       formData.append('position', currentCandidate.position);
       formData.append('organization_id', await getOrgIdByName(currentCandidate.group));
+      formData.append('partylist_id', currentCandidate.partylist_id || ''); // Add this line
       
       // Only append photo if a new one was selected
       if (photoName && photoPreview) {
@@ -487,6 +518,7 @@ const ViewCandidate = () => {
     if (currentCandidate.name !== originalCandidateData.name ||
         currentCandidate.position !== originalCandidateData.position ||
         currentCandidate.group !== originalCandidateData.group ||
+        currentCandidate.partylist_id !== originalCandidateData.partylist_id || // Add this line
         photoPreview) {
       return true;
     }
@@ -687,6 +719,9 @@ const ViewCandidate = () => {
                             {candidate.position}
                           </span>
                           <span className="text-[10px] xs:text-xs text-gray-500">{candidate.group}</span>
+                          <span className="text-[10px] xs:text-xs text-indigo-500 ml-1">
+                            {candidate.partylist && `• ${candidate.partylist}`}
+                          </span>
                         </div>
                       </div>
                       <div className="relative">
@@ -789,6 +824,9 @@ const ViewCandidate = () => {
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Organization
                     </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Partylist
+                    </th>
                     <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
                     </th>
@@ -821,6 +859,11 @@ const ViewCandidate = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-900">{candidate.group}</div>
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {candidate.partylist || 'Independent'}
+                          </div>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
@@ -850,7 +893,7 @@ const ViewCandidate = () => {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="5" className="px-6 py-12 text-center">
+                      <td colSpan="6" className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center">
                           <div className="p-4 bg-gray-100 rounded-full mb-4">
                             <FaSearch className="text-gray-400 text-2xl" />
@@ -943,6 +986,12 @@ const ViewCandidate = () => {
                 <div className="flex justify-between items-center">
                   <div className="text-gray-500">Organization</div>
                   <div className="font-medium text-gray-800">{currentCandidate.group}</div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <div className="text-gray-500">Partylist</div>
+                  <div className="font-medium text-gray-800">
+                    {currentCandidate.partylist || 'Independent'}
+                  </div>
                 </div>
               </div>
               
@@ -1106,6 +1155,23 @@ const ViewCandidate = () => {
                   </select>
                 </div>
 
+                {/* Partylist Dropdown */}
+                <div>
+                  <label htmlFor="partylist" className="block text-sm font-medium text-gray-700 mb-1">
+                    Partylist <span className="text-gray-500 text-xs">(with management options)</span>
+                  </label>
+                  <PartylistDropdown 
+                    value={currentCandidate.partylist_id || ''}
+                    onChange={(e) => {
+                      setCurrentCandidate({
+                        ...currentCandidate,
+                        partylist_id: e.target.value
+                      });
+                    }}
+                    error={null}
+                  />
+                </div>
+
                 {/* Photo Preview */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1261,30 +1327,25 @@ const ViewCandidate = () => {
                   </div>
                 )}
 
-                {/* Show photo change */}
-                {photoPreview && (
+                {/* Only show if partylist changed */}
+                {currentCandidate.partylist_id !== originalCandidateData.partylist_id && (
                   <div className="bg-white p-3 rounded border border-gray-200">
-                    <div className="text-xs font-medium text-gray-500 mb-1">Photo</div>
-                    <div className="flex flex-col sm:flex-row gap-3 items-center">
-                      <div className="text-center">
-                        <div className="text-xs text-gray-500 mb-1">Current</div>
-                        <div className="w-16 h-16 rounded-lg bg-gray-200 overflow-hidden border border-gray-300">
-                          <img
-                            src={getPhotoUrl(originalCandidateData)}
-                            alt="Current"
-                            className="w-full h-full object-cover"
-                          />
+                    <div className="text-xs font-medium text-gray-500 mb-1">Partylist</div>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-red-100 flex-shrink-0 flex items-center justify-center">
+                          <span className="text-red-500 text-xs">-</span>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {partylists.find(p => p.id === originalCandidateData.partylist_id)?.name || 'Independent'}
                         </div>
                       </div>
-                      <div className="text-gray-400">→</div>
-                      <div className="text-center">
-                        <div className="text-xs text-gray-500 mb-1">New</div>
-                        <div className="w-16 h-16 rounded-lg bg-gray-200 overflow-hidden border border-gray-300">
-                          <img
-                            src={photoPreview}
-                            alt="New"
-                            className="w-full h-full object-cover"
-                          />
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-green-100 flex-shrink-0 flex items-center justify-center">
+                          <span className="text-green-500 text-xs">+</span>
+                        </div>
+                        <div className="text-sm font-medium text-gray-800">
+                          {partylists.find(p => p.id === currentCandidate.partylist_id)?.name || 'Independent'}
                         </div>
                       </div>
                     </div>

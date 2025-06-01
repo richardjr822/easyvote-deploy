@@ -11,9 +11,9 @@ async def get_archived_candidates(
 ):
     """Get archived candidates with optional filtering by year"""
     try:
-        # Combine both select statements into one
+        # Update the select to use correct table name - partylist (singular) instead of partylists
         query = supabase.table("candidates")\
-            .select("id, name, position, organization_id, photo_url, created_at, is_archived, organizations(name)")\
+            .select("id, name, position, organization_id, photo_url, created_at, is_archived, partylist_id, organizations(name), partylist(id, name)")\
             .eq("is_archived", True)
         
         # Apply year filter if provided
@@ -34,6 +34,9 @@ async def get_archived_candidates(
             # Get organization name
             org_name = candidate["organizations"]["name"] if candidate["organizations"] else "Unknown"
             
+            # Get partylist name - changed to use partylist (singular)
+            partylist_name = candidate["partylist"]["name"] if candidate["partylist"] else None
+            
             # Count votes for this candidate
             votes_query = supabase.table("votes")\
                 .select("id")\
@@ -51,6 +54,8 @@ async def get_archived_candidates(
                 "name": candidate["name"],
                 "group": org_name,
                 "position": candidate["position"],
+                "partylist_id": candidate["partylist_id"],
+                "partylist": partylist_name,
                 "archivedYear": archived_year,
                 "createdAt": created_at,
                 "votes": vote_count,

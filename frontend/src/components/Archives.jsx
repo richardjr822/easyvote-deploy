@@ -96,6 +96,7 @@ const Archives = () => {
           candidate.name?.toLowerCase().includes(candidatesSearchTerm.toLowerCase()) ||
           candidate.group?.toLowerCase().includes(candidatesSearchTerm.toLowerCase()) ||
           candidate.position?.toLowerCase().includes(candidatesSearchTerm.toLowerCase()) ||
+          candidate.partylist?.toLowerCase().includes(candidatesSearchTerm.toLowerCase()) || // Add this line
           candidate.candidateId?.toString().includes(candidatesSearchTerm))
       )
       .sort((a, b) => {
@@ -286,7 +287,10 @@ const Archives = () => {
               />
               <div>
                 <p className="font-medium text-gray-900">{candidateToUnarchive.name}</p>
-                <p className="text-sm text-gray-500">{candidateToUnarchive.position} • {candidateToUnarchive.group}</p>
+                <p className="text-sm text-gray-500">
+                  {candidateToUnarchive.position} • {candidateToUnarchive.group}
+                  {candidateToUnarchive.partylist && ` • ${candidateToUnarchive.partylist}`}
+                </p>
               </div>
             </div>
           </div>
@@ -569,12 +573,12 @@ const Archives = () => {
                               <div className="font-medium text-gray-800">{candidate.group}</div>
                             </div>
                             <div className="bg-gray-50 p-1.5 rounded">
-                              <div className="text-gray-500 mb-0.5">Year</div>
-                              <div className="font-medium text-gray-800">{candidate.archivedYear}</div>
+                              <div className="text-gray-500 mb-0.5">Partylist</div>
+                              <div className="font-medium text-gray-800">{candidate.partylist || 'Independent'}</div>
                             </div>
                             <div className="bg-gray-50 p-1.5 rounded">
-                              <div className="text-gray-500 mb-0.5">Created</div>
-                              <div className="font-medium text-gray-800">{formatDate(candidate.createdAt)}</div>
+                              <div className="text-gray-500 mb-0.5">Year</div>
+                              <div className="font-medium text-gray-800">{candidate.archivedYear}</div>
                             </div>
                           </div>
                         </div>
@@ -597,6 +601,7 @@ const Archives = () => {
                             { field: "name", label: "Name" },
                             { field: "group", label: "Organization" },
                             { field: "position", label: "Position" },
+                            { field: "partylist", label: "Partylist" }, // Add this line
                             { field: "archivedYear", label: "Archived Year" },
                             { field: "createdAt", label: "Created At" },
                             { field: "votes", label: "Votes" },
@@ -660,6 +665,15 @@ const Archives = () => {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                               {candidate.position}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                              {candidate.partylist ? (
+                                <span className="px-2 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-indigo-100 text-indigo-800">
+                                  {candidate.partylist}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-500">Independent</span>
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">

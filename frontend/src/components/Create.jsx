@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   FaPaperclip, FaUserPlus, FaImage, FaHistory, 
   FaCheckCircle, FaTimes, FaExclamationCircle
 } from "react-icons/fa";
 import Header from "./header";
+import PartylistDropdown from "./PartylistDropdown"; // Add this import
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
@@ -24,6 +25,8 @@ const Create = () => {
     name: "",
     position: "",
     group: "",
+    partylist: "", // This is currently storing the name
+    partylistId: "", // Add this to store the ID
     photo: null,
   });
 
@@ -36,24 +39,114 @@ const Create = () => {
   const [showErrorToast, setShowErrorToast] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  // Add these new states at the top with other state declarations
+  const [existingCandidates, setExistingCandidates] = useState([]);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+
+  // Add this function to fetch all candidates for validation
+  const fetchExistingCandidates = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/candidates`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch candidates for validation');
+      }
+      
+      const candidates = await response.json();
+      setExistingCandidates(candidates);
+    } catch (error) {
+      console.error("Error fetching candidates for validation:", error);
+    }
+  }, []);
+
+  // Call this function when component mounts
+  useEffect(() => {
+    fetchExistingCandidates();
+  }, [fetchExistingCandidates]);
+
   const validateForm = () => {
     const newErrors = {};
     if (!formData.name.trim()) newErrors.name = "Name is required";
     if (!formData.position) newErrors.position = "Position is required";
     if (!formData.group) newErrors.group = "Group is required";
+    if (!formData.partylist) newErrors.partylist = "Partylist is required";
     if (!formData.photo) newErrors.photo = "Photo is required";
+    
+    // Check for position-partylist conflict
+    if (formData.position && formData.partylist && formData.group) {
+      const duplicate = existingCandidates.find(candidate => 
+        candidate.position === formData.position && 
+        candidate.partylist_id === formData.partylist &&
+        candidate.group === formData.group &&
+        !candidate.is_archived // Only check non-archived candidates
+      );
+      
+      if (duplicate) {
+        newErrors.position = `This partylist already has a candidate for ${formData.position}`;
+        newErrors.partylist = "Choose a different partylist or position";
+      }
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Update the handleInputChange function to convert name to uppercase
+  // Add a validation check when position or partylist changes
+  const handlePositionPartylistChange = useCallback(async (name, value) => {
+    // Update form data first
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Clear the specific error when field is edited
+    if (errors[name]) {
+      setErrors(prev => ({...prev, [name]: null}));
+    }
+    
+    // Only validate if we have both position and partylist selected
+    if (
+      (name === 'position' || name === 'partylist') && 
+      formData.group && 
+      formData.partylist && 
+      formData.position
+    ) {
+      setIsCheckingDuplicate(true);
+      
+      // Use existing data to check for conflicts
+      const positionToCheck = name === 'position' ? value : formData.position;
+      const partylistToCheck = name === 'partylist' ? value : formData.partylist;
+      
+      const duplicate = existingCandidates.find(candidate => 
+        candidate.position === positionToCheck && 
+        candidate.partylist_id === partylistToCheck &&
+        candidate.group === formData.group &&
+        !candidate.is_archived
+      );
+      
+      if (duplicate) {
+        setErrors(prev => ({
+          ...prev,
+          position: `This partylist already has a candidate for ${positionToCheck}`,
+          partylist: "Choose a different partylist or position"
+        }));
+      }
+      
+      setIsCheckingDuplicate(false);
+    }
+  }, [formData.position, formData.partylist, formData.group, errors, existingCandidates]);
+
+  // Update the input handlers to use the new validation
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     
     // Convert name field to uppercase automatically
     if (name === "name") {
       setFormData({ ...formData, [name]: value.toUpperCase() });
+    } else if (name === "position" || name === "partylist") {
+      // Use the validation function for position and partylist
+      handlePositionPartylistChange(name, value);
     } else {
       setFormData({ ...formData, [name]: value });
     }
@@ -93,9 +186,10 @@ const Create = () => {
     try {
       // Create FormData object
       const formDataObj = new FormData();
-      formDataObj.append('name', formData.name.toUpperCase()); // Ensure uppercase
+      formDataObj.append('name', formData.name.toUpperCase());
       formDataObj.append('position', formData.position);
       formDataObj.append('organization_id', await getOrgIdByName(formData.group));
+      formDataObj.append('partylist_id', formData.partylist); // Use partylist directly - it contains the ID
       formDataObj.append('photo', formData.photo);
       
       // Send to API
@@ -122,11 +216,42 @@ const Create = () => {
       const newCandidate = await response.json();
       console.log("Candidate created:", newCandidate);
       
+      // Get the partylist name for display
+      let partylistName = null; // Start with null, not 'Independent'
+      if (formData.partylist) {
+        try {
+          // Try to get the partylist name from the API
+          const partylistResponse = await fetch(`${API_BASE_URL}/partylists/${formData.partylist}`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          
+          if (partylistResponse.ok) {
+            const partylistData = await partylistResponse.json();
+            partylistName = partylistData.name;
+          } else {
+            console.error(`Failed to fetch partylist: ${partylistResponse.status}`);
+            // Try to get the name from the dropdown directly
+            const partylistSelect = document.querySelector('select[name="partylist"]');
+            if (partylistSelect) {
+              const selectedOption = partylistSelect.options[partylistSelect.selectedIndex];
+              if (selectedOption) {
+                partylistName = selectedOption.text;
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching partylist name:", error);
+        }
+      }
+      
       // Update history
       const candidateWithDetails = {
         ...newCandidate,
         position: formData.position,
         organization: formData.group,
+        partylist: partylistName, // Use name instead of ID
         photoUrl: newCandidate.photo_url.startsWith('http') 
           ? newCandidate.photo_url 
           : `${API_BASE_URL.replace('/api/v1', '')}${newCandidate.photo_url}`,
@@ -140,6 +265,8 @@ const Create = () => {
         name: "",
         position: "",
         group: "",
+        partylist: "",
+        partylistId: "", // Reset ID as well
         photo: null,
       });
       setPhotoPreview(null);
@@ -198,13 +325,42 @@ const Create = () => {
       }
       
       const candidates = await response.json();
-      setHistory(candidates.map(c => ({
-        ...c,
-        photoUrl: c.photo_url.startsWith('http') 
-          ? c.photo_url 
-          : `${API_BASE_URL.replace('/api/v1', '')}${c.photo_url}`,
-        timestamp: c.created_at
-      })));
+      
+      // Process candidates to get their full details including partylist names
+      const candidatesWithDetails = await Promise.all(candidates.map(async (c) => {
+        let partylistName = null;
+        
+        // Only fetch partylist name if partylist_id exists
+        if (c.partylist_id) {
+          try {
+            const partylistResponse = await fetch(`${API_BASE_URL}/partylists/${c.partylist_id}`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              }
+            });
+            
+            if (partylistResponse.ok) {
+              const partylistData = await partylistResponse.json();
+              partylistName = partylistData.name;
+            }
+          } catch (error) {
+            console.error(`Error fetching partylist for candidate ${c.id}:`, error);
+            // Don't default to Independent here, keep it null if fetch fails
+          }
+        }
+        
+        return {
+          ...c,
+          photoUrl: c.photo_url.startsWith('http') 
+            ? c.photo_url 
+            : `${API_BASE_URL.replace('/api/v1', '')}${c.photo_url}`,
+          timestamp: c.created_at,
+          // Only use the partylist name if we've successfully fetched it
+          partylist: partylistName || c.partylist
+        };
+      }));
+      
+      setHistory(candidatesWithDetails);
     } catch (error) {
       console.error("Error loading recent candidates:", error);
     }
@@ -254,8 +410,8 @@ const Create = () => {
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
-                    className={`block w-full border ${errors.name ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors uppercase`} // Added uppercase class
-                    placeholder="ENTER CANDIDATE'S FULL NAME" // Changed to uppercase for visual consistency
+                    className={`block w-full border ${errors.name ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors uppercase`}
+                    placeholder="ENTER CANDIDATE'S FULL NAME"
                   />
                   {errors.name && (
                     <div className="absolute -bottom-5 sm:-bottom-6 left-0 text-red-500 text-[10px] sm:text-xs flex items-center">
@@ -265,74 +421,92 @@ const Create = () => {
                 </div>
               </div>
 
-              {/* Two columns for Position and Group - Responsive */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                {/* Position Dropdown */}
-                <div>
-                  <label htmlFor="position" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                    Position
-                  </label>
-                  <div className={`relative ${errors.position ? 'mb-6' : ''}`}>
-                    <select
-                      id="position"
-                      name="position"
-                      value={formData.position}
-                      onChange={handleInputChange}
-                      className={`block w-full border ${errors.position ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors appearance-none`}
-                    >
-                      <option value="" disabled>Select a position</option>
-                      <option value="President">President</option>
-                      <option value="Vice President">Vice President</option>
-                      <option value="Secretary">Secretary</option>
-                      <option value="Treasurer">Treasurer</option>
-                      <option value="Public Relations Officer">Public Relations Officer</option>
-                      <option value="Auditor">Auditor</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 sm:px-3 text-gray-500">
-                      <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 12a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    {errors.position && (
-                      <div className="absolute -bottom-5 sm:-bottom-6 left-0 text-red-500 text-[10px] sm:text-xs flex items-center">
-                        <FaExclamationCircle className="mr-1" /> {errors.position}
+              {/* Two columns for Position and Group - Now THREE columns with Partylist */}
+              <div className="grid grid-cols-1 gap-4 sm:gap-6">
+                {/* Position and Group Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Position Dropdown */}
+                  <div>
+                    <label htmlFor="position" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                      Position
+                    </label>
+                    <div className={`relative ${errors.position ? 'mb-8 sm:mb-10' : ''}`}>
+                      <select
+                        id="position"
+                        name="position"
+                        value={formData.position}
+                        onChange={handleInputChange}
+                        className={`block w-full border ${errors.position ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors appearance-none`}
+                      >
+                        <option value="" disabled>Select a position</option>
+                        <option value="President">President</option>
+                        <option value="Vice President">Vice President</option>
+                        <option value="Secretary">Secretary</option>
+                        <option value="Treasurer">Treasurer</option>
+                        <option value="Public Relations Officer">Public Relations Officer</option>
+                        <option value="Auditor">Auditor</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 sm:px-3 text-gray-500">
+                        <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 12a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
                       </div>
-                    )}
+                      {errors.position && (
+                        <div className="absolute -bottom-7 sm:-bottom-8 left-0 text-red-500 text-[10px] sm:text-xs flex items-center">
+                          <FaExclamationCircle className="mr-1" /> {errors.position}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Group Dropdown */}
+                  <div>
+                    <label htmlFor="group" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                      Organization
+                    </label>
+                    <div className={`relative ${errors.group ? 'mb-6' : ''}`}>
+                      <select
+                        id="group"
+                        name="group"
+                        value={formData.group}
+                        onChange={handleInputChange}
+                        className={`block w-full border ${errors.group ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors appearance-none`}
+                      >
+                        <option value="" disabled>Select an organization</option>
+                        <option value="CCS Student Council">CCS Student Council</option>
+                        <option value="ELITES">ELITES</option>
+                        <option value="SPECS">SPECS</option>
+                        <option value="IMAGES">IMAGES</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 sm:px-3 text-gray-500">
+                        <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 12a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      {errors.group && (
+                        <div className="absolute -bottom-5 sm:-bottom-6 left-0 text-red-500 text-[10px] sm:text-xs flex items-center">
+                          <FaExclamationCircle className="mr-1" /> {errors.group}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* Group Dropdown */}
+                {/* Partylist Section - Full Width */}
                 <div>
-                  <label htmlFor="group" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                    Organization
+                  <label htmlFor="partylist" className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    Partylist <span className="text-gray-500 text-xs">(with management options)</span>
                   </label>
-                  <div className={`relative ${errors.group ? 'mb-6' : ''}`}>
-                    <select
-                      id="group"
-                      name="group"
-                      value={formData.group}
-                      onChange={handleInputChange}
-                      className={`block w-full border ${errors.group ? 'border-red-500' : 'border-gray-300'} rounded-lg shadow-sm px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors appearance-none`}
-                    >
-                      <option value="" disabled>Select an organization</option>
-                      <option value="CCS Student Council">CCS Student Council</option>
-                      <option value="ELITES">ELITES</option>
-                      <option value="SPECS">SPECS</option>
-                      <option value="IMAGES">IMAGES</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 sm:px-3 text-gray-500">
-                      <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 12a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    {errors.group && (
-                      <div className="absolute -bottom-5 sm:-bottom-6 left-0 text-red-500 text-[10px] sm:text-xs flex items-center">
-                        <FaExclamationCircle className="mr-1" /> {errors.group}
-                      </div>
-                    )}
-                  </div>
+                  <PartylistDropdown 
+                    value={formData.partylist}
+                    onChange={(e) => {
+                      // Use the validation handler
+                      handlePositionPartylistChange('partylist', e.target.value);
+                    }}
+                    error={errors.partylist}
+                  />
                 </div>
               </div>
 
@@ -446,14 +620,22 @@ const Create = () => {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-2 text-[10px] sm:text-xs">
-                      <div className="bg-gray-50 rounded p-2">
-                        <span className="text-gray-500">Position</span>
-                        <p className="font-medium text-gray-800">{candidate.position}</p>
+                    <div className="grid grid-cols-1 gap-2 text-[10px] sm:text-xs">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-gray-50 rounded p-2">
+                          <span className="text-gray-500">Position</span>
+                          <p className="font-medium text-gray-800">{candidate.position}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded p-2">
+                          <span className="text-gray-500">Organization</span>
+                          <p className="font-medium text-gray-800 truncate">{candidate.group}</p>
+                        </div>
                       </div>
                       <div className="bg-gray-50 rounded p-2">
-                        <span className="text-gray-500">Organization</span>
-                        <p className="font-medium text-gray-800">{candidate.group}</p>
+                        <span className="text-gray-500">Partylist</span>
+                        <p className="font-medium text-gray-800">
+                          {candidate.partylist || 'Independent'}
+                        </p>
                       </div>
                     </div>
                   </div>

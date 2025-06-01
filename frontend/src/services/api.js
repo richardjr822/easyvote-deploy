@@ -1,5 +1,5 @@
 // src/services/api.js
-const API_URL = 'http://localhost:8000/api/v1';
+const API_URL = import.meta.env.VITE_API_BASE_URL;
 
 // For requests that don't need authentication
 export async function fetchData(endpoint, options = {}) {
@@ -61,7 +61,6 @@ export const login = async (credentials, role) => {
     user_type: userType
   };
   
-  // Add the appropriate identifier field based on user type
   if (userType === "admin") {
     body.username = credentials.studentId; // For admins, using studentId as username
   } else {

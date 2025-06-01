@@ -21,12 +21,18 @@ async def create_candidate_with_position(
     name: str = Form(...),
     position: str = Form(...),
     organization_id: str = Form(...),
+    partylist_id: str = Form(...),  # Changed from partylist to partylist_id
     photo: UploadFile = File(...),
     token: str = Depends(oauth2_scheme)
 ):
     try:
         # Standardize name to uppercase
         name = name.strip().upper()
+        
+        # Instead of validating against hardcoded values, check if partylist exists in DB
+        partylist_resp = supabase.table("partylist").select("name").eq("id", partylist_id).execute()
+        if not partylist_resp.data or len(partylist_resp.data) == 0:
+            raise HTTPException(status_code=400, detail=f"Invalid partylist ID: {partylist_id}")
         
         # Validate that the organization exists
         org_resp = supabase.table("organizations").select("name").eq("id", organization_id).execute()
@@ -74,7 +80,7 @@ async def create_candidate_with_position(
         # Save the uploaded file
         try:
             with open(file_path, "wb") as buffer:
-                content = await photo.read()  # Read file asynchronously
+                content = await photo.read()
                 buffer.write(content)
         except Exception as e:
             print(f"File write error: {str(e)}")
@@ -91,6 +97,7 @@ async def create_candidate_with_position(
             "name": name,
             "position": position,
             "organization_id": organization_id,
+            "partylist_id": partylist_id,  # Changed from partylist to partylist_id
             "photo_url": photo_url,
             "is_archived": False,
             "created_at": created_at
@@ -173,7 +180,7 @@ async def get_recent_candidates(token: str = Depends(oauth2_scheme)):
     try:
         # Get the 10 most recently created candidates that are not archived
         candidates_resp = supabase.table("candidates")\
-            .select("id, name, position, organization_id, photo_url, created_at, organizations(name)")\
+            .select("id, name, position, organization_id, photo_url, created_at, partylist_id, partylist(name), organizations(name)")\
             .eq("is_archived", False)\
             .order("created_at", desc=True)\
             .limit(10)\
@@ -189,6 +196,8 @@ async def get_recent_candidates(token: str = Depends(oauth2_scheme)):
                 "id": c["id"],
                 "name": c["name"],
                 "position": c["position"],
+                "partylist": c["partylist"]["name"] if c["partylist"] else None,  # Get name from joined table
+                "partylist_id": c["partylist_id"],  # Include ID too
                 "photo_url": c["photo_url"],
                 "created_at": c["created_at"],
                 "group": c["organizations"]["name"] if c["organizations"] else "Unknown"
@@ -201,13 +210,13 @@ async def get_recent_candidates(token: str = Depends(oauth2_scheme)):
         print(f"Error in get_recent_candidates: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Add an endpoint to get all active candidates
+# Update get_all_candidates to include partylist
 @router.get("/")
 async def get_all_candidates(token: str = Depends(oauth2_scheme)):
     try:
         # Get all non-archived candidates
         candidates_resp = supabase.table("candidates")\
-            .select("id, name, position, organization_id, photo_url, created_at, organizations(name)")\
+            .select("id, name, position, organization_id, photo_url, created_at, partylist_id, partylist(name), organizations(name)")\
             .eq("is_archived", False)\
             .order("name", desc=False)\
             .execute()
@@ -222,6 +231,8 @@ async def get_all_candidates(token: str = Depends(oauth2_scheme)):
                 "id": c["id"],
                 "name": c["name"],
                 "position": c["position"],
+                "partylist": c["partylist"]["name"] if c["partylist"] else None,  # Get name from joined table
+                "partylist_id": c["partylist_id"],  # Include ID too
                 "photo_url": c["photo_url"],
                 "created_at": c["created_at"],
                 "group": c["organizations"]["name"] if c["organizations"] else "Unknown"
@@ -234,18 +245,25 @@ async def get_all_candidates(token: str = Depends(oauth2_scheme)):
         print(f"Error in get_all_candidates: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Update the update_candidate endpoint
 @router.put("/{candidate_id}")
 async def update_candidate(
     candidate_id: str,
     name: str = Form(...),
     position: str = Form(...),
     organization_id: str = Form(...),
+    partylist_id: str = Form(...),
     photo: Optional[UploadFile] = File(None),
     token: str = Depends(oauth2_scheme)
 ):
     try:
         # Standardize name to uppercase
         name = name.strip().upper()
+        
+        # Validate partylist exists in DB (consistent with create method)
+        partylist_resp = supabase.table("partylist").select("name").eq("id", partylist_id).execute()
+        if not partylist_resp.data or len(partylist_resp.data) == 0:
+            raise HTTPException(status_code=400, detail=f"Invalid partylist ID: {partylist_id}")
         
         # Check if candidate exists
         candidate_resp = supabase.table("candidates").select("*").eq("id", candidate_id).execute()
@@ -256,7 +274,8 @@ async def update_candidate(
         update_data = {
             "name": name,
             "position": position,
-            "organization_id": organization_id
+            "organization_id": organization_id,
+            "partylist_id": partylist_id  # Changed from partylist
         }
         
         # If a new photo is uploaded, process it

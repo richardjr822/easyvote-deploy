@@ -121,7 +121,7 @@ const Login = () => {
           {/* Decorative elements for left panel */}
           <div className="absolute top-0 right-0 h-full w-20 bg-gradient-to-l from-orange-100/65 to-transparent"></div>
           <div className="absolute bottom-0 left-0 h-20 w-full bg-gradient-to-t from-orange-100/65 to-transparent"></div>
-          <div className="absolute top-10 left-10 w-12 md:w-16 h-12 md:h-16 rounded-full bg-orange-200 opacity-45"></div>
+          <div className="absolute top-10 left-10 w-12    md:w-16 h-12 md:h-16 rounded-full bg-orange-200 opacity-45"></div>
           
           <div className="mb-2 md:mb-8 transform transition-all hover:scale-105 duration-300 relative z-10">
             <img
@@ -296,13 +296,20 @@ const Login = () => {
                 </button>
               </div>
 
-              {/* Help text based on selected role */}
-              <div className="text-xs text-gray-500 text-center mt-2">
-                {role === "Admin" ? (
-                  <p>Enter your admin username and password</p>
-                ) : (
-                  <p>Enter your 9-digit student ID and password</p>
-                )}
+              {/* Privacy Notice */}
+              <div className="text-xs text-gray-500 text-center mt-4 leading-relaxed">
+                <p>
+                  By clicking the login button, you recognize the authority of Gordon College to process your personal and sensitive information, pursuant to the{" "}
+                  <a 
+                    href="https://gordoncollegeccs.edu.ph/datapolicy/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-orange-600 hover:text-orange-700 underline hover:no-underline transition-all duration-200"
+                  >
+                    Gordon College General Privacy Notice
+                  </a>
+                  {" "}and applicable laws.
+                </p>
               </div>
             </form>
           </div>
