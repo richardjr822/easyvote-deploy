@@ -1,5 +1,8 @@
 // src/services/api.js
-const API_URL = import.meta.env.VITE_API_BASE_URL;
+// Normalize API_URL to ensure it doesn't end with a slash
+const API_URL = import.meta.env.VITE_API_BASE_URL.endsWith('/') 
+  ? import.meta.env.VITE_API_BASE_URL.slice(0, -1) 
+  : import.meta.env.VITE_API_BASE_URL;
 
 // For requests that don't need authentication
 export async function fetchData(endpoint, options = {}) {
