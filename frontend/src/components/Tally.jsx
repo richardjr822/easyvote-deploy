@@ -36,7 +36,7 @@ const Tally = () => {
         setError(null);
         
         // Fetch results from your API - Updated to use environment variable
-        const response = await fetch(`${API_BASE_URL}elections/results`, {
+        const response = await fetch(`${API_BASE_URL}/elections/results`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
